@@ -4,23 +4,21 @@ use crate::{
 };
 
 /// 创建灰度发布
-pub async fn create_gray_release_service(
+pub async fn create_gray_release(
     svc_ctx: &SvcCtx,
-    request: CreateGrayReleaseRequest,
+    req: CreateGrayReleaseRequest,
 ) -> Result<i32, SimprintError> {
-    let pool = &svc_ctx.db;
-    let id = crate::models::gray_releases::create_gray_release(pool, &request).await?;
+    let id = crate::models::gray_releases::create_gray_release(&svc_ctx.db, &req).await?;
 
     Ok(id)
 }
 
 /// 查询灰度发布详情
-pub async fn get_gray_release_by_id_service(
+pub async fn get_gray_release_by_id(
     svc_ctx: &SvcCtx,
-    payload: GetGrayReleaseParams,
+    id: i32,
 ) -> Result<GrayRelease, SimprintError> {
-    let pool = &svc_ctx.db;
-    let release = crate::models::gray_releases::query_gray_release_by_id(pool, payload.id)
+    let release = crate::models::gray_releases::query_gray_release_by_id(&svc_ctx.db, id)
         .await
         .map_err(|_| SimprintError::GrayReleaseNotFound)?;
 
@@ -30,15 +28,17 @@ pub async fn get_gray_release_by_id_service(
 /// 查询灰度发布列表
 pub async fn query_gray_releases_service(
     svc_ctx: &SvcCtx,
-    params: QueryGrayReleasesParams,
+    request: ListGrayReleasesRequest,
+    // params: QueryGrayReleaseParams,
+    // page_num: i32,
+    // page_size: i32,
 ) -> Result<GrayReleaseListResponse, SimprintError> {
-    let pool = &svc_ctx.db;
     let (total, list) = crate::models::gray_releases::query_gray_releases(
-        pool,
-        params.platform.as_deref(),
-        params.status.as_deref(),
-        params.page_num.unwrap_or(1),
-        params.page_size.unwrap_or(20),
+        &svc_ctx.db,
+        request.platform.as_deref(),
+        request.status.as_deref(),
+        request.page.unwrap_or(1),
+        request.page_size.unwrap_or(20),
     )
     .await?;
 
@@ -50,15 +50,16 @@ pub async fn update_gray_release_service(
     svc_ctx: &SvcCtx,
     request: UpdateGrayReleaseRequest,
 ) -> Result<bool, SimprintError> {
-    let pool = &svc_ctx.db;
+    let id = request.gray_release_id;
+
     // 检查灰度发布是否存在
-    crate::models::gray_releases::query_gray_release_by_id(pool, request.id)
+    crate::models::gray_releases::query_gray_release_by_id(&svc_ctx.db, id)
         .await
         .map_err(|_| SimprintError::GrayReleaseNotFound)?;
 
     // 更新灰度发布
     let success =
-        crate::models::gray_releases::update_gray_release(pool, request.id, &request).await?;
+        crate::models::gray_releases::update_gray_release(&svc_ctx.db, id, &request).await?;
 
     if !success {
         return Err(SimprintError::GrayReleaseNotFound);
@@ -68,12 +69,8 @@ pub async fn update_gray_release_service(
 }
 
 /// 启动灰度发布
-pub async fn start_gray_release_service(
-    svc_ctx: &SvcCtx,
-    payload: GetGrayReleaseParams,
-) -> Result<bool, SimprintError> {
-    let pool = &svc_ctx.db;
-    let release = crate::models::gray_releases::query_gray_release_by_id(pool, payload.id)
+pub async fn start_gray_release_service(svc_ctx: &SvcCtx, id: i32) -> Result<bool, SimprintError> {
+    let release = crate::models::gray_releases::query_gray_release_by_id(&svc_ctx.db, id)
         .await
         .map_err(|_| SimprintError::GrayReleaseNotFound)?;
 
@@ -91,7 +88,7 @@ pub async fn start_gray_release_service(
 
     // 更新状态为 active
     let request = UpdateGrayReleaseRequest {
-        id: payload.id,
+        gray_release_id: id,
         name: None,
         description: None,
         status: Some("active".to_string()),
@@ -103,7 +100,7 @@ pub async fn start_gray_release_service(
     };
 
     let success =
-        crate::models::gray_releases::update_gray_release(pool, payload.id, &request).await?;
+        crate::models::gray_releases::update_gray_release(&svc_ctx.db, id, &request).await?;
 
     if !success {
         return Err(SimprintError::GrayReleaseNotFound);
@@ -113,12 +110,8 @@ pub async fn start_gray_release_service(
 }
 
 /// 暂停灰度发布
-pub async fn pause_gray_release_service(
-    svc_ctx: &SvcCtx,
-    payload: GetGrayReleaseParams,
-) -> Result<bool, SimprintError> {
-    let pool = &svc_ctx.db;
-    let release = crate::models::gray_releases::query_gray_release_by_id(pool, payload.id)
+pub async fn pause_gray_release_service(svc_ctx: &SvcCtx, id: i32) -> Result<bool, SimprintError> {
+    let release = crate::models::gray_releases::query_gray_release_by_id(&svc_ctx.db, id)
         .await
         .map_err(|_| SimprintError::GrayReleaseNotFound)?;
 
@@ -132,7 +125,7 @@ pub async fn pause_gray_release_service(
 
     // 更新状态为 paused
     let request = UpdateGrayReleaseRequest {
-        id: payload.id,
+        gray_release_id: id,
         name: None,
         description: None,
         status: Some("paused".to_string()),
@@ -144,7 +137,7 @@ pub async fn pause_gray_release_service(
     };
 
     let success =
-        crate::models::gray_releases::update_gray_release(pool, payload.id, &request).await?;
+        crate::models::gray_releases::update_gray_release(&svc_ctx.db, id, &request).await?;
 
     if !success {
         return Err(SimprintError::GrayReleaseNotFound);
@@ -154,12 +147,8 @@ pub async fn pause_gray_release_service(
 }
 
 /// 结束灰度发布
-pub async fn finish_gray_release_service(
-    svc_ctx: &SvcCtx,
-    payload: GetGrayReleaseParams,
-) -> Result<bool, SimprintError> {
-    let pool = &svc_ctx.db;
-    let release = crate::models::gray_releases::query_gray_release_by_id(pool, payload.id)
+pub async fn finish_gray_release_service(svc_ctx: &SvcCtx, id: i32) -> Result<bool, SimprintError> {
+    let release = crate::models::gray_releases::query_gray_release_by_id(&svc_ctx.db, id)
         .await
         .map_err(|_| SimprintError::GrayReleaseNotFound)?;
 
@@ -177,7 +166,7 @@ pub async fn finish_gray_release_service(
 
     // 更新状态为 finished，并设置结束时间
     let request = UpdateGrayReleaseRequest {
-        id: payload.id,
+        gray_release_id: id,
         name: None,
         description: None,
         status: Some("finished".to_string()),
@@ -189,7 +178,7 @@ pub async fn finish_gray_release_service(
     };
 
     let success =
-        crate::models::gray_releases::update_gray_release(pool, payload.id, &request).await?;
+        crate::models::gray_releases::update_gray_release(&svc_ctx.db, id, &request).await?;
 
     if !success {
         return Err(SimprintError::GrayReleaseNotFound);
@@ -199,12 +188,8 @@ pub async fn finish_gray_release_service(
 }
 
 /// 取消灰度发布
-pub async fn cancel_gray_release_service(
-    svc_ctx: &SvcCtx,
-    payload: GetGrayReleaseParams,
-) -> Result<bool, SimprintError> {
-    let pool = &svc_ctx.db;
-    let release = crate::models::gray_releases::query_gray_release_by_id(pool, payload.id)
+pub async fn cancel_gray_release_service(svc_ctx: &SvcCtx, id: i32) -> Result<bool, SimprintError> {
+    let release = crate::models::gray_releases::query_gray_release_by_id(&svc_ctx.db, id)
         .await
         .map_err(|_| SimprintError::GrayReleaseNotFound)?;
 
@@ -222,7 +207,7 @@ pub async fn cancel_gray_release_service(
 
     // 更新状态为 cancelled
     let request = UpdateGrayReleaseRequest {
-        id: payload.id,
+        gray_release_id: id,
         name: None,
         description: None,
         status: Some("cancelled".to_string()),
@@ -234,7 +219,7 @@ pub async fn cancel_gray_release_service(
     };
 
     let success =
-        crate::models::gray_releases::update_gray_release(pool, payload.id, &request).await?;
+        crate::models::gray_releases::update_gray_release(&svc_ctx.db, id, &request).await?;
 
     if !success {
         return Err(SimprintError::GrayReleaseNotFound);
@@ -244,42 +229,26 @@ pub async fn cancel_gray_release_service(
 }
 
 /// 删除灰度发布（物理删除）
-pub async fn delete_gray_release_service(
-    svc_ctx: &SvcCtx,
-    payload: GetGrayReleaseParams,
-) -> Result<bool, SimprintError> {
-    let pool = &svc_ctx.db;
+pub async fn delete_gray_release_service(svc_ctx: &SvcCtx, id: i32) -> Result<bool, SimprintError> {
     // 先检查是否存在
-    let _release = crate::models::gray_releases::query_gray_release_by_id(pool, payload.id)
+    let _release = crate::models::gray_releases::query_gray_release_by_id(&svc_ctx.db, id)
         .await
         .map_err(|_| SimprintError::GrayReleaseNotFound)?;
 
-    // 物理删除（关联的 gray_resources 会通过 ON DELETE CASCADE 自动删除）
-    let success = crate::models::gray_releases::delete_gray_release(pool, payload.id).await?;
+    // 先删除关联表，避免外键约束
+    let _ = crate::models::machine_gray_allocations::delete_allocations_by_gray_release_id(
+        &svc_ctx.db,
+        id,
+    )
+    .await?;
+    let _ = crate::models::gray_resources::delete_resources_by_gray_release_id(&svc_ctx.db, id)
+        .await?;
+
+    let success = crate::models::gray_releases::delete_gray_release(&svc_ctx.db, id).await?;
 
     if !success {
         return Err(SimprintError::GrayReleaseNotFound);
     }
 
     Ok(true)
-}
-
-/// 检查白名单策略
-pub async fn check_whitelist_strategy_service(
-    svc_ctx: &SvcCtx,
-    machine_code: String,
-) -> Result<Option<GrayRelease>, SimprintError> {
-    let pool = &svc_ctx.db;
-    let release =
-        crate::models::gray_releases::check_whitelist_strategy(pool, &machine_code).await?;
-    Ok(release)
-}
-
-/// 查询动态策略灰度发布
-pub async fn query_dynamic_strategy_releases_service(
-    svc_ctx: &SvcCtx,
-) -> Result<Vec<GrayRelease>, SimprintError> {
-    let pool = &svc_ctx.db;
-    let releases = crate::models::gray_releases::query_dynamic_strategy_releases(pool).await?;
-    Ok(releases)
 }

@@ -102,7 +102,9 @@ pub async fn query_gray_releases(
             .bind(st)
             .bind(page_size)
             .bind((page_num - 1) * page_size),
-        (None, None) => sqlx::query_as(&list_sql).bind(page_size).bind((page_num - 1) * page_size),
+        (None, None) => sqlx::query_as(&list_sql)
+            .bind(page_size)
+            .bind((page_num - 1) * page_size),
     };
     let releases: Vec<GrayRelease> = list_query.fetch_all(pool).await?;
 
@@ -157,7 +159,11 @@ pub async fn update_allocated_count(
         WHERE id = $2
     ";
 
-    let row = sqlx::query(sql).bind(increment).bind(id).execute(pool).await?;
+    let row = sqlx::query(sql)
+        .bind(increment)
+        .bind(id)
+        .execute(pool)
+        .await?;
 
     Ok(row.rows_affected() == 1)
 }
@@ -217,6 +223,43 @@ pub async fn check_whitelist_strategy(
           AND gr.status = 'active'
           AND gr.start_time <= NOW()
           AND (gr.end_time IS NULL OR gr.end_time >= NOW())
+        ORDER BY gr.priority DESC, gr.created_at DESC
+        LIMIT 1
+        "#,
+    )
+    .bind(machine_code)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(release)
+}
+
+/// 检查标签策略（数据库层面过滤，单次查询）
+pub async fn check_tags_strategy(
+    pool: &Pool<Postgres>,
+    machine_code: &str,
+) -> Result<Option<GrayRelease>, Error> {
+    let release = sqlx::query_as::<_, GrayRelease>(
+        r#"
+        SELECT DISTINCT gr.* FROM gray_releases gr
+        INNER JOIN machine_users mu ON mu.machine_code = $1
+        INNER JOIN machine_user_tags mut ON mut.machine_user_id = mu.id
+        INNER JOIN machine_tags mt ON mt.id = mut.tag_id
+        WHERE gr.status = 'active'
+          AND gr.strategy_type = 'filter_user_tag'
+          AND gr.start_time <= NOW()
+          AND (gr.end_time IS NULL OR gr.end_time >= NOW())
+          AND mt.tag_name = ANY(
+            SELECT jsonb_array_elements_text(gr.strategy_config->'tags')
+          )
+        GROUP BY gr.id
+        HAVING CASE 
+          WHEN COALESCE((gr.strategy_config->>'match_all')::boolean, false) = true 
+          THEN COUNT(DISTINCT mt.tag_name) >= (
+            SELECT jsonb_array_length(gr.strategy_config->'tags')
+          )
+          ELSE COUNT(DISTINCT mt.tag_name) >= 1
+        END
         ORDER BY gr.priority DESC, gr.created_at DESC
         LIMIT 1
         "#,

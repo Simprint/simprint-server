@@ -1,6 +1,7 @@
 pub mod gray_releases;
 pub mod gray_resources;
 pub mod machine_gray_allocations;
+pub mod machine_tags;
 pub mod machine_users;
 pub mod maintenance;
 pub mod strategy_types;
@@ -35,6 +36,7 @@ pub mod workspaces;
 pub use gray_releases::*;
 pub use gray_resources::*;
 pub use machine_gray_allocations::*;
+pub use machine_tags::*;
 pub use machine_users::*;
 pub use maintenance::*;
 pub use strategy_types::*;

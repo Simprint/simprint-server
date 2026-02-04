@@ -13,12 +13,48 @@ pub struct CreateGrayReleaseRequest {
     pub priority: Option<i32>,
     pub strategy_type: Option<String>,
     pub strategy_config: Option<serde_json::Value>,
+    pub version_ids: Vec<i32>,
+    pub auto_start: bool,
+}
+
+/// 启动灰度发布请求
+#[derive(Debug, Deserialize, Serialize)]
+pub struct StartGrayReleaseRequest {
+    pub gray_release_id: i32,
+}
+
+/// 停止灰度发布请求
+#[derive(Debug, Deserialize, Serialize)]
+pub struct StopGrayReleaseRequest {
+    pub gray_release_id: i32,
+}
+
+/// 获取灰度发布详情请求
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GetGrayReleaseRequest {
+    pub gray_release_id: i32,
+}
+
+/// 查询灰度发布列表请求
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ListGrayReleasesRequest {
+    pub platform: Option<String>,
+    pub status: Option<String>,
+    pub page: Option<i32>,
+    pub page_size: Option<i32>,
+}
+
+/// 灰度发布列表响应
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GrayReleaseListResponse {
+    pub total: i64,
+    pub list: Vec<crate::dto::gray_releases::GrayRelease>,
 }
 
 /// 更新灰度发布请求
 #[derive(Debug, Deserialize, Serialize)]
 pub struct UpdateGrayReleaseRequest {
-    pub id: i32,
+    pub gray_release_id: i32,
     pub name: Option<String>,
     pub description: Option<String>,
     pub status: Option<String>,
@@ -29,31 +65,8 @@ pub struct UpdateGrayReleaseRequest {
     pub strategy_config: Option<serde_json::Value>,
 }
 
-/// 灰度发布列表响应
+/// 删除灰度发布请求
 #[derive(Debug, Deserialize, Serialize)]
-pub struct GrayReleaseListResponse {
-    pub total: i64,
-    pub list: Vec<crate::dto::gray_releases::GrayRelease>,
-}
-
-/// 查询灰度发布参数
-#[derive(Debug, Deserialize, Serialize)]
-pub struct QueryGrayReleaseParams {
-    pub platform: Option<String>,
-    pub status: Option<String>,
-}
-
-/// 获取灰度发布参数
-#[derive(Debug, Deserialize, Serialize)]
-pub struct GetGrayReleaseParams {
-    pub id: i32,
-}
-
-/// 查询灰度发布列表参数（带分页）
-#[derive(Debug, Deserialize, Serialize)]
-pub struct QueryGrayReleasesParams {
-    pub platform: Option<String>,
-    pub status: Option<String>,
-    pub page_num: Option<i32>,
-    pub page_size: Option<i32>,
+pub struct DeleteGrayReleaseRequest {
+    pub gray_release_id: i32,
 }

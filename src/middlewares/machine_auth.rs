@@ -1,4 +1,5 @@
-use crate::services::{get_machine_by_code_service, machine_not_allow_service};
+use crate::services::{get_machine_by_code, machine_not_allow};
+// use crate::services::{get_machine_by_code_service, machine_not_allow_service};
 use crate::state::{CurrentMachineUser, RequestContext};
 use crate::svc_ctx::SvcCtx;
 use axum::{extract::Request, extract::State, middleware::Next, response::Response};
@@ -19,7 +20,7 @@ pub async fn machine_auth(
 
     if let Some(code) = machine_code {
         // 检查机器是否被拉黑
-        let current_machine = match machine_not_allow_service(&svc_ctx, code.clone()).await {
+        let current_machine = match machine_not_allow(&svc_ctx, code.clone()).await {
             Ok(true) => {
                 // 机器被拉黑，但继续处理（业务层决定如何处理）
                 CurrentMachineUser {
@@ -31,7 +32,7 @@ pub async fn machine_auth(
             }
             Ok(false) => {
                 // 机器未被拉黑，尝试获取机器信息
-                match get_machine_by_code_service(&svc_ctx, code.clone()).await {
+                match get_machine_by_code(&svc_ctx, code.clone()).await {
                     Ok(machine) => CurrentMachineUser {
                         machine_code: code,
                         platform: machine.platform,

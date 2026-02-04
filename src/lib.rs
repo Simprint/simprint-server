@@ -21,7 +21,7 @@ pub async fn init_encrypt_secret(config: &IConfig) {
 
 /// 初始化minio
 pub async fn init_minio(config: &IConfig) {
-    let minio_config = &config.clone().minio.expect("minio配置不存在");
+    let minio_config = &config.clone().minio;
 
     let client = {
         utils::init_minio(

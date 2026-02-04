@@ -26,39 +26,31 @@ pub struct AllocationListResponse {
     pub list: Vec<crate::dto::machine_gray_allocations::MachineGrayAllocation>,
 }
 
-/// 移除分配请求
+/// 取消机器分配请求
 #[derive(Debug, Deserialize, Serialize)]
-pub struct RemoveAllocationRequest {
+pub struct DeallocateMachineRequest {
     pub machine_code: String,
     pub gray_release_id: i32,
 }
 
-/// 查询分配参数
+/// 查询灰度分配列表请求
 #[derive(Debug, Deserialize, Serialize)]
-pub struct GetAllocationParams {
-    pub machine_code: Option<String>,
+pub struct ListAllocationsByReleaseRequest {
+    pub gray_release_id: i32,
+    pub page_num: Option<i32>,
+    pub page_size: Option<i32>,
+}
+
+/// 检查机器是否在灰度中请求
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CheckMachineInGrayRequest {
+    pub machine_code: String,
+}
+
+/// 检查机器是否在灰度中响应
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CheckMachineInGrayResponse {
+    pub in_gray: bool,
     pub gray_release_id: Option<i32>,
-    pub page_num: Option<i32>,
-    pub page_size: Option<i32>,
-}
-
-/// 查询机器是否在灰度中请求
-#[derive(Debug, Deserialize, Serialize)]
-pub struct IsMachineInGrayRequest {
-    pub machine_code: String,
-    pub gray_release_id: i32,
-}
-
-/// 查询机器所有分配请求
-#[derive(Debug, Deserialize, Serialize)]
-pub struct GetMachineAllocationsRequest {
-    pub machine_code: String,
-}
-
-/// 查询灰度发布所有分配请求
-#[derive(Debug, Deserialize, Serialize)]
-pub struct GetReleaseAllocationsRequest {
-    pub gray_release_id: i32,
-    pub page_num: Option<i32>,
-    pub page_size: Option<i32>,
+    pub gray_release: Option<crate::dto::gray_releases::GrayRelease>,
 }

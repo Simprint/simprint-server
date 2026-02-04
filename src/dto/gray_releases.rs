@@ -2,8 +2,8 @@ use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
-/// 灰度发布 DTO
-#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+/// 灰度发布
+#[derive(Debug, Deserialize, Serialize, FromRow, Clone, Default)]
 pub struct GrayRelease {
     pub id: i32,
     pub name: String,

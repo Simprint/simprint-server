@@ -2,8 +2,8 @@ use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
-/// 机器灰度分配 DTO
-#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+/// 机器灰度分配
+#[derive(Debug, Deserialize, Serialize, FromRow, Clone, Default)]
 pub struct MachineGrayAllocation {
     pub id: i32,
     pub machine_code: String,

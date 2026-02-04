@@ -3,8 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::dto::maintenance::MaintenanceType;
 
-/// 创建维护请求
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CreateMaintenanceRequest {
     pub name: String,
     pub description: Option<String>,
@@ -14,15 +13,15 @@ pub struct CreateMaintenanceRequest {
     pub maintenance_type: MaintenanceType,
 }
 
-/// 获取维护参数
+/// 获取维护详情请求
 #[derive(Debug, Deserialize, Serialize)]
-pub struct GetMaintenanceParams {
+pub struct GetMaintenanceRequest {
     pub id: i64,
 }
 
-/// 查询维护列表参数
+/// 查询维护列表请求
 #[derive(Debug, Deserialize, Serialize)]
-pub struct QueryMaintenancesParams {
+pub struct ListMaintenancesRequest {
     pub limit: Option<i32>,
     pub offset: Option<i32>,
 }
@@ -34,15 +33,10 @@ pub struct UpdateMaintenanceStatusRequest {
     pub status: String,
 }
 
-/// 维护列表响应
-#[derive(Debug, Deserialize, Serialize)]
-pub struct MaintenanceListResponse {
-    pub list: Vec<crate::dto::maintenance::Maintenance>,
-}
+/// 结束维护请求（可为空 body）
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct EndMaintenanceRequest {}
 
-/// 健康检查响应
-#[derive(Debug, Deserialize, Serialize)]
-pub struct HealthResponse {
-    pub status: String,
-    pub timestamp: String,
-}
+/// 获取当前活跃维护请求（可为空 body）
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct GetActiveMaintenanceRequest {}

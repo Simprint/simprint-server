@@ -31,9 +31,9 @@ pub async fn get_extensions_service(
     .map_err(|e| e.to_string())?;
 
     // 将 object path 转换为完整 URL
-    let resource_url = svc_ctx.config.minio.as_ref().map(|c| c.resource_url.clone());
-    let extension_bucket = svc_ctx.config.minio.as_ref().map(|c| c.extension_bucket.clone());
-    ExtensionDto::transform_urls_batch(&mut extensions, &resource_url, &extension_bucket);
+    let resource_url = svc_ctx.config.minio.resource_url.as_str();
+    let extension_bucket = svc_ctx.config.minio.extension_bucket.as_str();
+    ExtensionDto::transform_urls_batch(&mut extensions, resource_url, extension_bucket);
 
     let total = models::extensions::fetch_extensions_count(&svc_ctx.db, keyword, category)
         .await
@@ -53,8 +53,8 @@ pub async fn get_extension_service(
         .ok_or_else(|| "扩展不存在".to_string())?;
 
     // 将 object path 转换为完整 URL
-    let resource_url = svc_ctx.config.minio.as_ref().map(|c| c.resource_url.clone());
-    let extension_bucket = svc_ctx.config.minio.as_ref().map(|c| c.extension_bucket.clone());
+    let resource_url = svc_ctx.config.minio.resource_url.as_str();
+    let extension_bucket = svc_ctx.config.minio.extension_bucket.as_str();
     extension.transform_urls(&resource_url, &extension_bucket);
 
     Ok(extension)
@@ -73,8 +73,8 @@ pub async fn get_user_installed_extensions_service(
     user_uuid: Uuid,
     team_uuid: Option<Uuid>,
 ) -> Result<Vec<InstalledExtensionItem>, String> {
-    let resource_url = svc_ctx.config.minio.as_ref().map(|c| c.resource_url.clone());
-    let extension_bucket = svc_ctx.config.minio.as_ref().map(|c| c.extension_bucket.clone());
+    let resource_url = svc_ctx.config.minio.resource_url.as_str();
+    let extension_bucket = svc_ctx.config.minio.extension_bucket.as_str();
 
     // 查询用户直接安装的扩展
     let user_installed = models::extensions::fetch_user_extensions(&svc_ctx.db, user_uuid)
@@ -100,8 +100,11 @@ pub async fn get_user_installed_extensions_service(
             let mut icon_url = ext.icon_url.clone();
             if let Some(path) = &icon_url {
                 if !path.is_empty() && !path.starts_with("http") {
-                    icon_url =
-                        get_objects::get_extension_icon_url(&resource_url, &extension_bucket, path);
+                    icon_url = Some(get_objects::get_extension_icon_url(
+                        &resource_url,
+                        &extension_bucket,
+                        path,
+                    ));
                 }
             }
 
@@ -174,8 +177,11 @@ pub async fn get_user_installed_extensions_service(
             let mut icon_url = ext.icon_url.clone();
             if let Some(path) = &icon_url {
                 if !path.is_empty() && !path.starts_with("http") {
-                    icon_url =
-                        get_objects::get_extension_icon_url(&resource_url, &extension_bucket, path);
+                    icon_url = Some(get_objects::get_extension_icon_url(
+                        &resource_url,
+                        &extension_bucket,
+                        path,
+                    ));
                 }
             }
 
@@ -241,8 +247,8 @@ pub async fn get_team_installed_extensions_service(
     svc_ctx: &SvcCtx,
     team_uuid: Uuid,
 ) -> Result<Vec<InstalledExtensionItem>, String> {
-    let resource_url = svc_ctx.config.minio.as_ref().map(|c| c.resource_url.clone());
-    let extension_bucket = svc_ctx.config.minio.as_ref().map(|c| c.extension_bucket.clone());
+    let resource_url = svc_ctx.config.minio.resource_url.as_str();
+    let extension_bucket = svc_ctx.config.minio.extension_bucket.as_str();
 
     // 查询团队直接安装的扩展
     let team_installed = models::extensions::fetch_team_extensions(&svc_ctx.db, team_uuid)
@@ -267,8 +273,11 @@ pub async fn get_team_installed_extensions_service(
             let mut icon_url = ext.icon_url.clone();
             if let Some(path) = &icon_url {
                 if !path.is_empty() && !path.starts_with("http") {
-                    icon_url =
-                        get_objects::get_extension_icon_url(&resource_url, &extension_bucket, path);
+                    icon_url = Some(get_objects::get_extension_icon_url(
+                        &resource_url,
+                        &extension_bucket,
+                        path,
+                    ));
                 }
             }
 
@@ -341,8 +350,11 @@ pub async fn get_team_installed_extensions_service(
             let mut icon_url = ext.icon_url.clone();
             if let Some(path) = &icon_url {
                 if !path.is_empty() && !path.starts_with("http") {
-                    icon_url =
-                        get_objects::get_extension_icon_url(&resource_url, &extension_bucket, path);
+                    icon_url = Some(get_objects::get_extension_icon_url(
+                        &resource_url,
+                        &extension_bucket,
+                        path,
+                    ));
                 }
             }
 

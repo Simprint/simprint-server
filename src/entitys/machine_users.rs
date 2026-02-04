@@ -9,6 +9,9 @@ pub struct CreateMachineUserRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_uuid: Option<Uuid>,
     pub platform: Option<String>,
+    /// 标签列表（可选，注册成功后会绑定到机器）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
     pub hardware_hash: Option<String>, // 硬件哈希
     pub hardware_raw: Option<String>,  // 硬件原始信息
     pub version_info: Option<String>,  // JSON格式的版本信息
@@ -17,7 +20,6 @@ pub struct CreateMachineUserRequest {
 /// 更新机器用户请求
 #[derive(Debug, Deserialize, Serialize)]
 pub struct UpdateMachineUserRequest {
-    pub id: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_uuid: Option<Uuid>,
     pub platform: Option<String>,
@@ -43,10 +45,49 @@ pub struct QueryMachineUserParams {
     pub status: Option<String>,
 }
 
-/// 绑定机器请求
+/// 获取机器信息请求（id 或 machine_code 二选一）
 #[derive(Debug, Deserialize, Serialize)]
-pub struct BindMachineRequest {
+pub struct GetMachineRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub machine_code: Option<String>,
+}
+
+/// 查询机器列表请求
+#[derive(Debug, Deserialize, Serialize)]
+pub struct QueryMachinesRequest {
+    pub params: QueryMachineUserParams,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page_num: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page_size: Option<i32>,
+}
+
+/// 更新机器信息请求
+#[derive(Debug, Deserialize, Serialize)]
+pub struct UpdateMachineRequest {
+    pub id: i32,
+    pub request: UpdateMachineUserRequest,
+}
+
+/// 绑定用户到机器请求
+#[derive(Debug, Deserialize, Serialize)]
+pub struct BindUserRequest {
     pub machine_code: String,
+    pub user_uuid: Uuid,
+}
+
+/// 解绑用户请求
+#[derive(Debug, Deserialize, Serialize)]
+pub struct UnbindUserRequest {
+    pub machine_code: String,
+    pub user_uuid: Uuid,
+}
+
+/// 获取用户机器列表请求
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GetUserMachinesRequest {
     pub user_uuid: Uuid,
 }
 
@@ -58,40 +99,9 @@ pub struct UpdateMachineVersionRequest {
     pub version_info: serde_json::Value,
 }
 
-/// 拉黑/取消拉黑机器请求
+/// 拉黑/恢复机器请求
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AllowOrBlacklistMachineRequest {
     pub machine_code: String,
     pub allow: bool,
-}
-
-/// 获取机器参数
-#[derive(Debug, Deserialize, Serialize)]
-pub struct GetMachineParams {
-    pub id: Option<i32>,
-    pub machine_code: Option<String>,
-}
-
-/// 查询机器列表参数（带分页）
-#[derive(Debug, Deserialize, Serialize)]
-pub struct QueryMachinesParams {
-    pub user_uuid: Option<String>,
-    pub platform: Option<String>,
-    pub status: Option<String>,
-    pub page_num: Option<i32>,
-    pub page_size: Option<i32>,
-}
-
-/// 绑定机器参数（用于查询字符串）
-#[derive(Debug, Deserialize, Serialize)]
-pub struct BindMachineParams {
-    pub machine_code: String,
-    pub user_uuid: String,
-}
-
-/// 更新机器版本参数（用于查询字符串）
-#[derive(Debug, Deserialize, Serialize)]
-pub struct UpdateMachineVersionParams {
-    pub machine_code: String,
-    pub user_uuid: String,
 }

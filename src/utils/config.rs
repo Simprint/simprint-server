@@ -26,9 +26,8 @@ pub struct MinioConfig {
     pub access_key: String,
     pub secret_access_key: String,
     pub avatar_bucket: String,
-    /// 扩展插件存储桶
-    #[serde(default = "default_extension_bucket")]
     pub extension_bucket: String,
+    pub version_resource_bucket: String,
 }
 
 fn default_extension_bucket() -> String {
@@ -88,7 +87,7 @@ pub struct IConfig {
     pub app: AppConfig,
     pub database: DatabaseConfig,
     pub redis: RedisConfig,
-    pub minio: Option<MinioConfig>,
+    pub minio: MinioConfig,
     pub smtp: Option<SmtpConfig>,
     #[serde(default = "default_workspace_quota_config")]
     pub workspace_quota: WorkspaceQuotaConfig,

@@ -1,4 +1,4 @@
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -41,9 +41,9 @@ pub struct Maintenance {
     pub name: String,
     pub description: Option<String>,
     pub status: String,
-    pub start_time: DateTime<chrono::Utc>,
-    pub end_time: DateTime<chrono::Utc>,
+    pub start_time: DateTime<Utc>,
+    pub end_time: DateTime<Utc>,
     pub maintenance_type: String,
-    pub created_at: DateTime<chrono::Utc>,
-    pub updated_at: DateTime<chrono::Utc>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }

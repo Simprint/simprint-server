@@ -5,14 +5,14 @@ use crate::caches::{
     set_reset_password_code, set_user_public_key,
 };
 use crate::entitys::{
-    LoginRequest, LoginResponse, MachineInfo, RegisterRequest, RegisterResponse,
-    ResetPasswordRequest, UpdatePasswordRequest, UpdateUserRequest, UserResponse,
+    CreateMachineUserRequest, LoginRequest, LoginResponse, MachineInfo, RegisterRequest,
+    RegisterResponse, ResetPasswordRequest, UpdatePasswordRequest, UpdateUserRequest, UserResponse,
 };
 use crate::models::{
     billing,
     user::{
-        create_user_with_info, fetch_user_by_uuid, fetch_user_info_by_email, fetch_user_info_by_uuid,
-        update_password, update_user_info,
+        create_user_with_info, fetch_user_by_uuid, fetch_user_info_by_email,
+        fetch_user_info_by_uuid, update_password, update_user_info,
     },
 };
 use crate::services::messages;
@@ -51,15 +51,16 @@ async fn common_login_logic(
     // 3. 如果提供了机器信息，注册/绑定机器用户
     if let Some(ref machine_info) = machine_info {
         if !machine_info.machine_code.is_empty() {
-            let _ = crate::services::machine_users::register_machine_service(
+            let _ = crate::services::machine_users::register_machine(
                 svc_ctx,
-                crate::entitys::machine_users::CreateMachineUserRequest {
+                CreateMachineUserRequest {
                     machine_code: machine_info.machine_code.clone(),
                     user_uuid: Some(user_uuid),
                     platform: machine_info.platform.clone(),
                     hardware_hash: machine_info.hardware_hash.clone(),
                     hardware_raw: machine_info.hardware_raw.clone(),
                     version_info: machine_info.version_info.clone(),
+                    tags: None,
                 },
             )
             .await;

@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
 use crate::dto::TagDto;
-use crate::entitys::{CreateTagRequest, UpdateTagRequest};
+use crate::entitys::tags::{CreateTagRequest, UpdateTagRequest};
 use crate::models;
 use crate::svc_ctx::SvcCtx;
 

@@ -33,6 +33,7 @@ resource_url = "https://oss.csgot9.com"
 access_key = "5kSjAHnITsMZQEwzJN2g"
 secret_access_key = "eGs3ntV5KvmVzMbLpQwj86w5b5vdSHxUcmqcYhay"
 avatar_bucket = "avatars"
+version_resource_bucket = "versions"
 
 [smtp]
 smtp_server = "smtp.163.com"

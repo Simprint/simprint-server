@@ -3,11 +3,10 @@ use sqlx::{Pool, Postgres};
 
 use crate::{dto::maintenance::Maintenance, entitys::maintenance::CreateMaintenanceRequest};
 
-/// 创建维护
 pub async fn create_maintenance(
     pool: &Pool<Postgres>,
     request: CreateMaintenanceRequest,
-) -> Result<Maintenance, sqlx::Error> {
+) -> Result<Maintenance, anyhow::Error> {
     let now = Utc::now();
 
     // 开始事务
@@ -31,7 +30,7 @@ pub async fn create_maintenance(
         INSERT INTO maintenances (name, description, status, start_time, end_time, maintenance_type, created_at, updated_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id, name, description, status, start_time, end_time, maintenance_type, created_at, updated_at
-        "#,
+        "#
     )
     .bind(request.name)
     .bind(request.description)
@@ -50,7 +49,6 @@ pub async fn create_maintenance(
     Ok(maintenance)
 }
 
-/// 查询维护列表
 pub async fn list_maintenances(
     pool: &Pool<Postgres>,
     limit: Option<i64>,
@@ -77,7 +75,7 @@ pub async fn list_maintenances(
 }
 
 /// 结束维护
-pub async fn end_maintenance(pool: &Pool<Postgres>) -> Result<bool, sqlx::Error> {
+pub async fn end_maintenance(pool: &Pool<Postgres>) -> Result<bool, anyhow::Error> {
     let now = Utc::now();
 
     // 关闭所有其他活跃的维护
@@ -95,12 +93,11 @@ pub async fn end_maintenance(pool: &Pool<Postgres>) -> Result<bool, sqlx::Error>
     Ok(true)
 }
 
-/// 更新维护状态
 pub async fn update_maintenance_status(
     pool: &Pool<Postgres>,
     id: i64,
     status: &str,
-) -> Result<bool, sqlx::Error> {
+) -> Result<bool, anyhow::Error> {
     let now = Utc::now();
     let result = sqlx::query(
         r#"
@@ -118,11 +115,10 @@ pub async fn update_maintenance_status(
     Ok(result.rows_affected() > 0)
 }
 
-/// 根据ID查询维护
 pub async fn get_maintenance_by_id(
     pool: &Pool<Postgres>,
     id: i64,
-) -> Result<Option<Maintenance>, sqlx::Error> {
+) -> Result<Option<Maintenance>, anyhow::Error> {
     let maintenance = sqlx::query_as::<_, Maintenance>(
         r#"
         SELECT id, name, description, status, start_time, end_time, maintenance_type,
@@ -138,10 +134,9 @@ pub async fn get_maintenance_by_id(
     Ok(maintenance)
 }
 
-/// 获取当前活跃维护
 pub async fn get_active_maintenances(
     pool: &Pool<Postgres>,
-) -> Result<Option<Maintenance>, sqlx::Error> {
+) -> Result<Option<Maintenance>, anyhow::Error> {
     let maintenance = sqlx::query_as::<_, Maintenance>(
         r#"
         SELECT id, name, description, status, start_time, end_time, maintenance_type,
@@ -156,4 +151,30 @@ pub async fn get_active_maintenances(
     .await?;
 
     Ok(maintenance)
+}
+
+pub async fn create_maintenances_table(pool: &Pool<Postgres>) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS maintenances (
+            id BIGSERIAL PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            description TEXT,
+            status VARCHAR(20) NOT NULL,
+            start_time TIMESTAMPTZ NOT NULL,
+            end_time TIMESTAMPTZ NOT NULL,
+            maintenance_type VARCHAR(20) NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+            updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_maintenances_status ON maintenances(status);
+        CREATE INDEX IF NOT EXISTS idx_maintenances_time ON maintenances(start_time, end_time);
+        CREATE INDEX IF NOT EXISTS idx_maintenances_type ON maintenances(maintenance_type);
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }

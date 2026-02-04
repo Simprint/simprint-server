@@ -2,8 +2,8 @@ use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
-/// 版本 DTO
-#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+/// 统一版本表
+#[derive(Debug, Deserialize, Serialize, FromRow, Clone, Default)]
 pub struct Version {
     pub id: i32,
     pub type_id: i32,
@@ -23,4 +23,9 @@ pub struct Version {
     pub created_at: DateTime<chrono::Utc>,
     pub updated_at: Option<DateTime<chrono::Utc>>,
     pub deleted_at: Option<DateTime<chrono::Utc>>,
+    pub arch: Option<String>,
+    pub package_format: Option<String>,
+    pub requires_extract: bool,
+    pub entrypoint_template: Option<String>,
+    pub extract_root: Option<String>,
 }

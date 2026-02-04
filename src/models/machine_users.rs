@@ -8,13 +8,13 @@ pub async fn insert_machine_user(
     pool: &Pool<Postgres>,
     request: &CreateMachineUserRequest,
 ) -> Result<i32, Error> {
-    let sql = r#"
+    let sql = "
         INSERT INTO machine_users (
             machine_code, user_uuid, platform, status, version_info, hardware_hash, hardware_raw, bind_time, created_at
         ) VALUES (
             $1, $2, $3, 'active', $4, $5, $6, NOW(), NOW()
         ) RETURNING id
-    "#;
+    ";
 
     // 解析 version_info JSON 字符串
     let version_info_value = request
@@ -39,12 +39,11 @@ pub async fn insert_machine_user(
 pub async fn query_machine_user_by_id(
     pool: &Pool<Postgres>,
     id: i32,
-) -> Result<Option<MachineUser>, Error> {
-    let machine_user: Option<MachineUser> =
-        sqlx::query_as(r#"SELECT * FROM machine_users WHERE id = $1"#)
-            .bind(id)
-            .fetch_optional(pool)
-            .await?;
+) -> Result<MachineUser, Error> {
+    let machine_user: MachineUser = sqlx::query_as("SELECT * FROM machine_users WHERE id = $1")
+        .bind(id)
+        .fetch_one(pool)
+        .await?;
 
     Ok(machine_user)
 }
@@ -55,7 +54,7 @@ pub async fn query_machine_user_by_code(
     machine_code: &str,
 ) -> Result<MachineUser, Error> {
     let machine_user: MachineUser = sqlx::query_as(
-        r#"SELECT * FROM machine_users WHERE machine_code = $1 ORDER BY bind_time DESC LIMIT 1"#,
+        "SELECT * FROM machine_users WHERE machine_code = $1 ORDER BY bind_time DESC LIMIT 1",
     )
     .bind(machine_code)
     .fetch_one(pool)
@@ -70,7 +69,7 @@ pub async fn query_machines_by_code(
     machine_code: &str,
 ) -> Result<Vec<MachineUser>, Error> {
     let machines: Vec<MachineUser> = sqlx::query_as(
-        r#"SELECT * FROM machine_users WHERE machine_code = $1 ORDER BY bind_time DESC"#,
+        "SELECT * FROM machine_users WHERE machine_code = $1 ORDER BY bind_time DESC",
     )
     .bind(machine_code)
     .fetch_all(pool)
@@ -86,7 +85,7 @@ pub async fn query_machine_user_by_code_and_user(
     user_uuid: &Uuid,
 ) -> Result<Option<MachineUser>, Error> {
     let machine_user: Option<MachineUser> =
-        sqlx::query_as(r#"SELECT * FROM machine_users WHERE machine_code = $1 AND user_uuid = $2"#)
+        sqlx::query_as("SELECT * FROM machine_users WHERE machine_code = $1 AND user_uuid = $2")
             .bind(machine_code)
             .bind(user_uuid)
             .fetch_optional(pool)
@@ -97,29 +96,25 @@ pub async fn query_machine_user_by_code_and_user(
 
 /// 判断机器是否允许
 pub async fn machine_not_allow(pool: &Pool<Postgres>, machine_code: &str) -> Result<bool, Error> {
-    let allow: Option<bool> = sqlx::query_scalar(
-        r#"SELECT EXISTS(SELECT 1 FROM machine_users WHERE machine_code = $1 AND allow = false)"#,
+    let allow: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM machine_users WHERE machine_code = $1 AND allow = false) ",
     )
     .bind(machine_code)
-    .fetch_optional(pool)
+    .fetch_one(pool)
     .await?;
 
-    Ok(allow.unwrap_or(false))
+    Ok(allow)
 }
 
 /// 拉黑或取消拉黑机器
-pub async fn allow_or_blacklist_machine(
-    pool: &Pool<Postgres>,
-    machine_code: &str,
-    allow: bool,
-) -> Result<bool, Error> {
-    let row = sqlx::query(r#"UPDATE machine_users SET allow = $1 WHERE machine_code = $2"#)
+pub async fn allow_or_blacklist_machine(pool: &Pool<Postgres>, machine_code: &str, allow: bool) -> Result<bool, Error> {
+    let row = sqlx::query("UPDATE machine_users SET allow = $1 WHERE machine_code = $2")
         .bind(allow)
         .bind(machine_code)
         .execute(pool)
         .await?;
 
-    Ok(row.rows_affected() > 0)
+    Ok(row.rows_affected() > 1)
 }
 
 /// 根据用户UUID查询机器列表
@@ -127,17 +122,34 @@ pub async fn query_machines_by_user_uuid(
     pool: &Pool<Postgres>,
     user_uuid: &Uuid,
 ) -> Result<Vec<MachineUser>, Error> {
+    let machines: Vec<MachineUser> =
+        sqlx::query_as("SELECT * FROM machine_users WHERE user_uuid = $1 ORDER BY bind_time DESC")
+            .bind(user_uuid)
+            .fetch_all(pool)
+            .await?;
+
+    Ok(machines)
+}
+
+/// 根据多个用户 UUID 批量查询机器列表（返回所有匹配的 machine_users，含 user_uuid 便于按用户分组）
+pub async fn query_machines_by_user_uuids(
+    pool: &Pool<Postgres>,
+    user_uuids: &[Uuid],
+) -> Result<Vec<MachineUser>, Error> {
+    if user_uuids.is_empty() {
+        return Ok(vec![]);
+    }
     let machines: Vec<MachineUser> = sqlx::query_as(
-        r#"SELECT * FROM machine_users WHERE user_uuid = $1 ORDER BY bind_time DESC"#,
+        "SELECT * FROM machine_users WHERE user_uuid = ANY($1) ORDER BY user_uuid, bind_time DESC",
     )
-    .bind(user_uuid)
+    .bind(user_uuids)
     .fetch_all(pool)
     .await?;
 
     Ok(machines)
 }
 
-/// 查询机器用户列表（分页，简化版本，支持可选的过滤条件）
+/// 查询机器用户列表（分页）
 pub async fn query_machine_users(
     pool: &Pool<Postgres>,
     user_uuid: Option<&Uuid>,
@@ -146,53 +158,57 @@ pub async fn query_machine_users(
     page_num: i32,
     page_size: i32,
 ) -> Result<(i64, Vec<MachineUser>), Error> {
-    // 构建基础查询
-    let mut count_sql = r#"SELECT COUNT(*) FROM machine_users WHERE 1=1"#.to_string();
-    let mut list_sql = r#"SELECT * FROM machine_users WHERE 1=1"#.to_string();
+    // 构建查询条件
+    let mut where_clauses = vec!["1=1".to_string()];
+    let mut param_index = 1;
 
-    if user_uuid.is_some() {
-        count_sql.push_str(" AND user_uuid = $1");
-        list_sql.push_str(" AND user_uuid = $1");
+    if let Some(_uuid) = user_uuid {
+        where_clauses.push(format!("user_uuid = ${}", param_index));
+        param_index += 1;
     }
-    if platform.is_some() {
-        let idx = if user_uuid.is_some() { 2 } else { 1 };
-        count_sql.push_str(&format!(" AND platform = ${}", idx));
-        list_sql.push_str(&format!(" AND platform = ${}", idx));
+    if let Some(_plat) = platform {
+        where_clauses.push(format!("platform = ${}", param_index));
+        param_index += 1;
     }
-    if status.is_some() {
-        let idx = match (user_uuid.is_some(), platform.is_some()) {
-            (true, true) => 3,
-            (true, false) | (false, true) => 2,
-            (false, false) => 1,
-        };
-        count_sql.push_str(&format!(" AND status = ${}", idx));
-        list_sql.push_str(&format!(" AND status = ${}", idx));
+    if let Some(_st) = status {
+        where_clauses.push(format!("status = ${}", param_index));
+        param_index += 1;
     }
 
-    list_sql.push_str(" ORDER BY created_at DESC");
-    let limit_idx = match (user_uuid.is_some(), platform.is_some(), status.is_some()) {
-        (true, true, true) => 4,
-        (true, true, false) | (true, false, true) | (false, true, true) => 3,
-        (true, false, false) | (false, true, false) | (false, false, true) => 2,
-        (false, false, false) => 1,
-    };
-    let offset_idx = limit_idx + 1;
-    list_sql.push_str(&format!(" LIMIT ${} OFFSET ${}", limit_idx, offset_idx));
+    let where_sql = where_clauses.join(" AND ");
 
     // 获取总数
+    let count_sql = format!("SELECT COUNT(*) FROM machine_users WHERE {}", where_sql);
     let count_result: (i64,) = match (user_uuid, platform, status) {
         (Some(u), Some(p), Some(s)) => {
-            sqlx::query_as(&count_sql).bind(u).bind(p).bind(s).fetch_one(pool).await?
+            sqlx::query_as(&count_sql)
+                .bind(u)
+                .bind(p)
+                .bind(s)
+                .fetch_one(pool)
+                .await?
         }
         (Some(u), Some(p), None) => {
-            sqlx::query_as(&count_sql).bind(u).bind(p).fetch_one(pool).await?
+            sqlx::query_as(&count_sql)
+                .bind(u)
+                .bind(p)
+                .fetch_one(pool)
+                .await?
         }
         (Some(u), None, Some(s)) => {
-            sqlx::query_as(&count_sql).bind(u).bind(s).fetch_one(pool).await?
+            sqlx::query_as(&count_sql)
+                .bind(u)
+                .bind(s)
+                .fetch_one(pool)
+                .await?
         }
         (Some(u), None, None) => sqlx::query_as(&count_sql).bind(u).fetch_one(pool).await?,
         (None, Some(p), Some(s)) => {
-            sqlx::query_as(&count_sql).bind(p).bind(s).fetch_one(pool).await?
+            sqlx::query_as(&count_sql)
+                .bind(p)
+                .bind(s)
+                .fetch_one(pool)
+                .await?
         }
         (None, Some(p), None) => sqlx::query_as(&count_sql).bind(p).fetch_one(pool).await?,
         (None, None, Some(s)) => sqlx::query_as(&count_sql).bind(s).fetch_one(pool).await?,
@@ -200,6 +216,12 @@ pub async fn query_machine_users(
     };
 
     // 获取分页列表
+    let list_sql = format!(
+        "SELECT * FROM machine_users WHERE {} ORDER BY created_at DESC LIMIT ${} OFFSET ${}",
+        where_sql,
+        param_index,
+        param_index + 1
+    );
     let machines: Vec<MachineUser> = match (user_uuid, platform, status) {
         (Some(u), Some(p), Some(s)) => {
             sqlx::query_as(&list_sql)
@@ -280,7 +302,7 @@ pub async fn update_machine_user(
     id: i32,
     request: &UpdateMachineUserRequest,
 ) -> Result<bool, Error> {
-    let sql = r#"
+    let sql = "
         UPDATE machine_users SET
             user_uuid = COALESCE($1, user_uuid),
             platform = COALESCE($2, platform),
@@ -289,7 +311,7 @@ pub async fn update_machine_user(
             hardware_raw = COALESCE($5, hardware_raw),
             updated_at = NOW()
         WHERE id = $6
-    "#;
+    ";
 
     let row = sqlx::query(sql)
         .bind(&request.user_uuid)
@@ -310,9 +332,17 @@ pub async fn update_machine_version_info(
     machine_code: &str,
     version_info: &serde_json::Value,
 ) -> Result<bool, Error> {
-    let sql = r#"UPDATE machine_users SET version_info = $1 WHERE machine_code = $2"#;
+    let sql = "
+        UPDATE machine_users SET
+            version_info = $1
+        WHERE machine_code = $2
+    ";
 
-    let row = sqlx::query(sql).bind(version_info).bind(machine_code).execute(pool).await?;
+    let row = sqlx::query(sql)
+        .bind(version_info)
+        .bind(machine_code)
+        .execute(pool)
+        .await?;
 
     Ok(row.rows_affected() > 0)
 }
@@ -324,13 +354,13 @@ pub async fn update_machine_bind_and_version(
     user_uuid: &Uuid,
     version_info: Option<&serde_json::Value>,
 ) -> Result<bool, Error> {
-    let sql = r#"
+    let sql = "
         UPDATE machine_users SET
             bind_time = NOW(),
             updated_at = NOW(),
             version_info = COALESCE($3, version_info)
         WHERE machine_code = $1 AND user_uuid = $2
-    "#;
+    ";
 
     let row = sqlx::query(sql)
         .bind(machine_code)
@@ -348,10 +378,17 @@ pub async fn update_user_bind_time(
     machine_code: &str,
     user_uuid: &Uuid,
 ) -> Result<bool, Error> {
-    let sql =
-        r#"UPDATE machine_users SET updated_at = NOW() WHERE machine_code = $1 AND user_uuid = $2"#;
+    let sql = "
+        UPDATE machine_users SET
+            updated_at = NOW()
+        WHERE machine_code = $1 AND user_uuid = $2
+    ";
 
-    let row = sqlx::query(sql).bind(machine_code).bind(user_uuid).execute(pool).await?;
+    let row = sqlx::query(sql)
+        .bind(machine_code)
+        .bind(user_uuid)
+        .execute(pool)
+        .await?;
 
     Ok(row.rows_affected() > 0)
 }
@@ -367,27 +404,35 @@ pub async fn bind_user_to_machine(
 
     if existing.is_some() {
         // 已存在，只更新绑定时间
-        let sql = r#"
+        let sql = "
             UPDATE machine_users SET
                 bind_time = NOW(),
                 updated_at = NOW()
             WHERE machine_code = $1 AND user_uuid = $2
-        "#;
+        ";
 
-        let row = sqlx::query(sql).bind(machine_code).bind(user_uuid).execute(pool).await?;
+        let row = sqlx::query(sql)
+            .bind(machine_code)
+            .bind(user_uuid)
+            .execute(pool)
+            .await?;
 
         Ok(row.rows_affected() > 0)
     } else {
         // 不存在，创建新记录
-        let sql = r#"
+        let sql = "
             INSERT INTO machine_users (
                 machine_code, user_uuid, status, bind_time, created_at
             ) VALUES (
                 $1, $2, 'active', NOW(), NOW()
             )
-        "#;
+        ";
 
-        let row = sqlx::query(sql).bind(machine_code).bind(user_uuid).execute(pool).await?;
+        let row = sqlx::query(sql)
+            .bind(machine_code)
+            .bind(user_uuid)
+            .execute(pool)
+            .await?;
 
         Ok(row.rows_affected() > 0)
     }
@@ -399,9 +444,16 @@ pub async fn unbind_user_from_machine(
     machine_code: &str,
     user_uuid: &Uuid,
 ) -> Result<bool, Error> {
-    let sql = r#"DELETE FROM machine_users WHERE machine_code = $1 AND user_uuid = $2"#;
+    let sql = "
+        DELETE FROM machine_users 
+        WHERE machine_code = $1 AND user_uuid = $2
+    ";
 
-    let row = sqlx::query(sql).bind(machine_code).bind(user_uuid).execute(pool).await?;
+    let row = sqlx::query(sql)
+        .bind(machine_code)
+        .bind(user_uuid)
+        .execute(pool)
+        .await?;
 
     Ok(row.rows_affected() > 0)
 }
@@ -412,14 +464,18 @@ pub async fn update_machine_bind_time(
     machine_code: &str,
     user_uuid: &Uuid,
 ) -> Result<bool, Error> {
-    let sql = r#"
+    let sql = "
         UPDATE machine_users SET
             updated_at = NOW(),
             bind_time = NOW()
         WHERE machine_code = $1 AND user_uuid = $2
-    "#;
+    ";
 
-    let row = sqlx::query(sql).bind(machine_code).bind(user_uuid).execute(pool).await?;
+    let row = sqlx::query(sql)
+        .bind(machine_code)
+        .bind(user_uuid)
+        .execute(pool)
+        .await?;
 
     Ok(row.rows_affected() > 0)
 }

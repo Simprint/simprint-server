@@ -32,17 +32,8 @@ pub fn get_extension_crx_url(resource_url: &str, bucket_name: &str, object_path:
 /// - `bucket_name`: 扩展存储桶名称
 /// - `object_path`: 图标对象路径（数据库中存储的路径）
 // pub fn get_extension_icon_url(resource_url: &str, bucket_name: &str, object_path: &str) -> String {
-pub fn get_extension_icon_url(
-    resource_url: &Option<String>,
-    bucket_name: &Option<String>,
-    object_path: &str,
-) -> Option<String> {
-    match (resource_url, bucket_name) {
-        (Some(resource_url), Some(bucket_name)) => {
-            Some(get_object_url(resource_url, bucket_name, object_path))
-        }
-        _ => None,
-    }
+pub fn get_extension_icon_url(resource_url: &str, bucket_name: &str, object_path: &str) -> String {
+    get_object_url(resource_url, bucket_name, object_path)
 }
 
 /// 获取头像的完整 URL
@@ -53,4 +44,18 @@ pub fn get_extension_icon_url(
 /// - `resource_hash`: 头像文件哈希
 pub fn get_avatar_url(resource_url: &str, bucket_name: &str, resource_hash: &str) -> String {
     get_object_url(resource_url, bucket_name, resource_hash)
+}
+
+/// 获取版本资源的完整 URL
+///
+/// # Arguments
+/// - `resource_url`: MinIO 资源访问基础 URL
+/// - `bucket_name`: 版本资源存储桶名称
+/// - `object_path`: 版本资源对象路径（数据库中存储的路径）
+pub fn get_version_resource_url(
+    resource_url: &str,
+    bucket_name: &str,
+    object_path: &str,
+) -> String {
+    get_object_url(resource_url, bucket_name, object_path)
 }

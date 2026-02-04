@@ -39,33 +39,26 @@ impl ExtensionDto {
     /// 返回给客户端时需要组装为完整 URL。
     ///
     /// 如果 URL 已经是完整的 http(s) 地址，则不进行转换。
-    pub fn transform_urls(
-        &mut self,
-        resource_url: &Option<String>,
-        extension_bucket: &Option<String>,
-    ) {
+    pub fn transform_urls(&mut self, resource_url: &str, extension_bucket: &str) {
         // 转换图标 URL
         if let Some(path) = &self.icon_url {
             if !path.is_empty() && !path.starts_with("http") {
-                self.icon_url =
-                    get_objects::get_extension_icon_url(resource_url, extension_bucket, path);
+                self.icon_url = Some(get_objects::get_extension_icon_url(
+                    resource_url,
+                    extension_bucket,
+                    path,
+                ));
             }
         }
 
         // 转换下载 URL
         if let Some(path) = &self.download_url {
             if !path.is_empty() && !path.starts_with("http") {
-                if let (Some(resource_url), Some(extension_bucket)) =
-                    (resource_url, extension_bucket)
-                {
-                    self.download_url = Some(get_objects::get_extension_crx_url(
-                        resource_url,
-                        extension_bucket,
-                        path,
-                    ));
-                } else {
-                    self.download_url = None;
-                }
+                self.download_url = Some(get_objects::get_extension_crx_url(
+                    resource_url,
+                    extension_bucket,
+                    path,
+                ));
             }
         }
     }
@@ -73,8 +66,8 @@ impl ExtensionDto {
     /// 批量转换 ExtensionDto 列表中的 object path 为完整 URL
     pub fn transform_urls_batch(
         extensions: &mut [ExtensionDto],
-        resource_url: &Option<String>,
-        extension_bucket: &Option<String>,
+        resource_url: &str,
+        extension_bucket: &str,
     ) {
         for ext in extensions.iter_mut() {
             ext.transform_urls(resource_url, extension_bucket);

@@ -6,11 +6,10 @@ use crate::entitys::{
     BatchAssignTagRequest, BatchCreateEnvironmentRequest, BatchMoveToGroupRequest,
     BatchRemoveTagsRequest, BatchUuidRequest, ClearEnvironmentCookiesRequest,
     ClearEnvironmentUrlsRequest, CreateEnvironmentRequest, CreateGroupRequest, CreateResponse,
-    CreateTagRequest, DeleteEnvironmentCookieRequest, DeleteEnvironmentUrlRequest,
-    EnvironmentDetailResponse, EnvironmentListResponse, IdResponse, ListEnvironmentsRequest,
-    MoveToGroupRequest, RemoveTagRequest, SetEnvironmentAccountsRequest,
-    SetEnvironmentProxyRequest, UpdateEnvironmentRequest, UpdateGroupRequest, UpdateTagRequest,
-    UuidRequest,
+    DeleteEnvironmentCookieRequest, DeleteEnvironmentUrlRequest, EnvironmentDetailResponse,
+    EnvironmentListResponse, IdResponse, ListEnvironmentsRequest, MoveToGroupRequest,
+    RemoveTagRequest, SetEnvironmentAccountsRequest, SetEnvironmentProxyRequest,
+    UpdateEnvironmentRequest, UpdateGroupRequest, UpdateTagRequest, UuidRequest,
 };
 use crate::services;
 use crate::state::RequestContext;
@@ -136,7 +135,7 @@ pub async fn delete_group_handler(
 pub async fn create_tag_handler(
     State(svc_ctx): State<SvcCtx>,
     Extension(ctx): Extension<RequestContext>,
-    Json(payload): Json<CreateTagRequest>,
+    Json(payload): Json<crate::entitys::tags::CreateTagRequest>,
 ) -> Result<CreateResponse> {
     let team_uuid = services::teams::get_current_team_service(&svc_ctx, ctx.user_uuid_unwrap())
         .await

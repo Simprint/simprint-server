@@ -1,5 +1,6 @@
 use crate::{
-    dto::maintenance::Maintenance, entitys::maintenance::*, errors::SimprintError, svc_ctx::SvcCtx,
+    dto::maintenance::Maintenance, entitys::maintenance::CreateMaintenanceRequest,
+    errors::SimprintError, svc_ctx::SvcCtx,
 };
 
 /// 创建维护
@@ -7,8 +8,9 @@ pub async fn create_maintenance_service(
     svc_ctx: &SvcCtx,
     request: CreateMaintenanceRequest,
 ) -> Result<i64, SimprintError> {
-    let pool = &svc_ctx.db;
-    let maintenance = crate::models::maintenance::create_maintenance(pool, request).await?;
+    let maintenance = crate::models::maintenance::create_maintenance(&svc_ctx.db, request)
+        .await
+        .map_err(|e| SimprintError::InvalidRequest(format!("创建维护失败: {}", e)))?;
 
     Ok(maintenance.id)
 }
@@ -16,12 +18,11 @@ pub async fn create_maintenance_service(
 /// 根据ID查询维护
 pub async fn get_maintenance_by_id_service(
     svc_ctx: &SvcCtx,
-    payload: GetMaintenanceParams,
-) -> Result<Maintenance, SimprintError> {
-    let pool = &svc_ctx.db;
-    let maintenance = crate::models::maintenance::get_maintenance_by_id(pool, payload.id)
-        .await?
-        .ok_or(SimprintError::MaintenanceNotFound)?;
+    id: i64,
+) -> Result<Option<Maintenance>, SimprintError> {
+    let maintenance = crate::models::maintenance::get_maintenance_by_id(&svc_ctx.db, id)
+        .await
+        .map_err(|e| SimprintError::InvalidRequest(format!("查询维护失败: {}", e)))?;
 
     Ok(maintenance)
 }
@@ -29,36 +30,38 @@ pub async fn get_maintenance_by_id_service(
 /// 查询维护列表
 pub async fn list_maintenances_service(
     svc_ctx: &SvcCtx,
-    payload: QueryMaintenancesParams,
-) -> Result<MaintenanceListResponse, SimprintError> {
-    let pool = &svc_ctx.db;
+    limit: Option<i32>,
+    offset: Option<i32>,
+) -> Result<Vec<Maintenance>, SimprintError> {
     let maintenances = crate::models::maintenance::list_maintenances(
-        pool,
-        payload.limit.map(|l| l as i64),
-        payload.offset.map(|o| o as i64),
+        &svc_ctx.db,
+        limit.map(|l| l as i64),
+        offset.map(|o| o as i64),
     )
-    .await?;
+    .await
+    .map_err(|e| SimprintError::InvalidRequest(format!("查询维护列表失败: {}", e)))?;
 
-    Ok(MaintenanceListResponse { list: maintenances })
+    Ok(maintenances)
 }
 
 /// 更新维护状态
 pub async fn update_maintenance_status_service(
     svc_ctx: &SvcCtx,
-    payload: UpdateMaintenanceStatusRequest,
+    id: i64,
+    status: String,
 ) -> Result<bool, SimprintError> {
-    let pool = &svc_ctx.db;
-    let success =
-        crate::models::maintenance::update_maintenance_status(pool, payload.id, &payload.status)
-            .await?;
+    let success = crate::models::maintenance::update_maintenance_status(&svc_ctx.db, id, &status)
+        .await
+        .map_err(|e| SimprintError::InvalidRequest(format!("更新维护状态失败: {}", e)))?;
 
     Ok(success)
 }
 
 /// 结束维护
 pub async fn end_maintenance_service(svc_ctx: &SvcCtx) -> Result<bool, SimprintError> {
-    let pool = &svc_ctx.db;
-    let success = crate::models::maintenance::end_maintenance(pool).await?;
+    let success = crate::models::maintenance::end_maintenance(&svc_ctx.db)
+        .await
+        .map_err(|e| SimprintError::InvalidRequest(format!("结束维护失败: {}", e)))?;
 
     Ok(success)
 }
@@ -67,8 +70,9 @@ pub async fn end_maintenance_service(svc_ctx: &SvcCtx) -> Result<bool, SimprintE
 pub async fn get_active_maintenance_service(
     svc_ctx: &SvcCtx,
 ) -> Result<Option<Maintenance>, SimprintError> {
-    let pool = &svc_ctx.db;
-    let maintenance = crate::models::maintenance::get_active_maintenances(pool).await?;
+    let maintenance = crate::models::maintenance::get_active_maintenances(&svc_ctx.db)
+        .await
+        .map_err(|e| SimprintError::InvalidRequest(format!("查询活跃维护失败: {}", e)))?;
 
     Ok(maintenance)
 }
