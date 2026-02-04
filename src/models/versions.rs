@@ -408,3 +408,130 @@ pub async fn query_all_active_latest_versions(
 
     Ok(converted)
 }
+
+/// 查询浏览器内核类型的最新版本列表
+/// 筛选 type_code 以 SIMPRINT_KERNEL_ 开头的版本类型
+/// 按 (type_code, resource_name) 分组，每组取最新版本
+/// 最新判定：is_latest 优先，其次 COALESCE(pub_date, created_at)，最后 id
+/// platform 为可选，None 表示不按平台过滤
+pub async fn query_browser_kernel_latest_versions(
+    pool: &Pool<Postgres>,
+    platform: Option<&str>,
+) -> Result<Vec<(String, String, Version)>, Error> {
+    #[derive(sqlx::FromRow)]
+    struct VersionWithTypeCode {
+        type_code: String,
+        id: i32,
+        type_id: i32,
+        resource_name: String,
+        version: String,
+        name: Option<String>,
+        notes: Option<String>,
+        platform: Option<String>,
+        url: Option<String>,
+        hash: Option<String>,
+        signature: Option<String>,
+        install_path: Option<String>,
+        file_size: Option<i32>,
+        is_latest: bool,
+        status: String,
+        pub_date: Option<DateTime<Utc>>,
+        created_at: DateTime<Utc>,
+        updated_at: Option<DateTime<Utc>>,
+        deleted_at: Option<DateTime<Utc>>,
+        arch: Option<String>,
+        package_format: Option<String>,
+        requires_extract: bool,
+        entrypoint_template: Option<String>,
+        extract_root: Option<String>,
+    }
+
+    let results: Vec<VersionWithTypeCode> = if let Some(plat) = platform {
+        sqlx::query_as(
+            r#"
+            SELECT DISTINCT ON (vt.type_code, v.resource_name)
+                vt.type_code,
+                v.id, v.type_id, v.resource_name, v.version, v.name, v.notes,
+                v.platform, v.url, v.hash, v.signature, v.install_path,
+                v.file_size, v.is_latest, v.status, v.pub_date,
+                v.created_at, v.updated_at, v.deleted_at,
+                v.arch, v.package_format, v.requires_extract, v.entrypoint_template, v.extract_root
+            FROM versions v
+            INNER JOIN version_types vt ON v.type_id = vt.id
+            WHERE vt.type_code LIKE 'SIMPRINT_KERNEL_%'
+              AND vt.is_active = true
+              AND v.platform = $1
+              AND v.status = 'active'
+              AND v.deleted_at IS NULL
+            ORDER BY vt.type_code, v.resource_name,
+                     v.is_latest DESC,
+                     COALESCE(v.pub_date, v.created_at) DESC NULLS LAST,
+                     v.id DESC
+            "#,
+        )
+        .bind(plat)
+        .fetch_all(pool)
+        .await?
+    } else {
+        sqlx::query_as(
+            r#"
+            SELECT DISTINCT ON (vt.type_code, v.resource_name)
+                vt.type_code,
+                v.id, v.type_id, v.resource_name, v.version, v.name, v.notes,
+                v.platform, v.url, v.hash, v.signature, v.install_path,
+                v.file_size, v.is_latest, v.status, v.pub_date,
+                v.created_at, v.updated_at, v.deleted_at,
+                v.arch, v.package_format, v.requires_extract, v.entrypoint_template, v.extract_root
+            FROM versions v
+            INNER JOIN version_types vt ON v.type_id = vt.id
+            WHERE vt.type_code LIKE 'SIMPRINT_KERNEL_%'
+              AND vt.is_active = true
+              AND v.status = 'active'
+              AND v.deleted_at IS NULL
+            ORDER BY vt.type_code, v.resource_name,
+                     v.is_latest DESC,
+                     COALESCE(v.pub_date, v.created_at) DESC NULLS LAST,
+                     v.id DESC
+            "#,
+        )
+        .fetch_all(pool)
+        .await?
+    };
+
+    let converted: Vec<(String, String, Version)> = results
+        .into_iter()
+        .map(|r| {
+            (
+                r.type_code.clone(),
+                r.resource_name.clone(),
+                Version {
+                    id: r.id,
+                    type_id: r.type_id,
+                    resource_name: r.resource_name,
+                    version: r.version,
+                    name: r.name.clone(),
+                    notes: r.notes,
+                    platform: r.platform,
+                    url: r.name,
+                    hash: r.hash,
+                    signature: r.signature,
+                    install_path: r.install_path,
+                    file_size: r.file_size,
+                    is_latest: r.is_latest,
+                    status: r.status,
+                    pub_date: r.pub_date,
+                    created_at: r.created_at,
+                    updated_at: r.updated_at,
+                    deleted_at: r.deleted_at,
+                    arch: r.arch,
+                    package_format: r.package_format,
+                    requires_extract: r.requires_extract,
+                    entrypoint_template: r.entrypoint_template,
+                    extract_root: r.extract_root,
+                },
+            )
+        })
+        .collect();
+
+    Ok(converted)
+}

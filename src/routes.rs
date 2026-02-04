@@ -8,6 +8,7 @@ pub mod accounts;
 pub mod api;
 pub mod audit;
 pub mod billing;
+pub mod browser_kernel;
 pub mod environments;
 pub mod extensions;
 pub mod group_permissions;
