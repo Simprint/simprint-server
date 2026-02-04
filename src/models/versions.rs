@@ -410,13 +410,14 @@ pub async fn query_all_active_latest_versions(
 }
 
 /// 查询浏览器内核类型的最新版本列表
-/// 筛选 type_code 以 SIMPRINT_KERNEL_ 开头的版本类型
+/// type_code_filter 为 None 时筛选 type_code LIKE 'SIMPRINT_KERNEL_%'，为 Some 时精确匹配
 /// 按 (type_code, resource_name) 分组，每组取最新版本
 /// 最新判定：is_latest 优先，其次 COALESCE(pub_date, created_at)，最后 id
 /// platform 为可选，None 表示不按平台过滤
 pub async fn query_browser_kernel_latest_versions(
     pool: &Pool<Postgres>,
     platform: Option<&str>,
+    type_code_filter: Option<&str>,
 ) -> Result<Vec<(String, String, Version)>, Error> {
     #[derive(sqlx::FromRow)]
     struct VersionWithTypeCode {
@@ -446,56 +447,67 @@ pub async fn query_browser_kernel_latest_versions(
         extract_root: Option<String>,
     }
 
-    let results: Vec<VersionWithTypeCode> = if let Some(plat) = platform {
-        sqlx::query_as(
-            r#"
-            SELECT DISTINCT ON (vt.type_code, v.resource_name)
-                vt.type_code,
-                v.id, v.type_id, v.resource_name, v.version, v.name, v.notes,
-                v.platform, v.url, v.hash, v.signature, v.install_path,
-                v.file_size, v.is_latest, v.status, v.pub_date,
-                v.created_at, v.updated_at, v.deleted_at,
-                v.arch, v.package_format, v.requires_extract, v.entrypoint_template, v.extract_root
-            FROM versions v
-            INNER JOIN version_types vt ON v.type_id = vt.id
-            WHERE vt.type_code LIKE 'SIMPRINT_KERNEL_%'
-              AND vt.is_active = true
-              AND v.platform = $1
-              AND v.status = 'active'
-              AND v.deleted_at IS NULL
-            ORDER BY vt.type_code, v.resource_name,
-                     v.is_latest DESC,
-                     COALESCE(v.pub_date, v.created_at) DESC NULLS LAST,
-                     v.id DESC
-            "#,
-        )
-        .bind(plat)
-        .fetch_all(pool)
-        .await?
-    } else {
-        sqlx::query_as(
-            r#"
-            SELECT DISTINCT ON (vt.type_code, v.resource_name)
-                vt.type_code,
-                v.id, v.type_id, v.resource_name, v.version, v.name, v.notes,
-                v.platform, v.url, v.hash, v.signature, v.install_path,
-                v.file_size, v.is_latest, v.status, v.pub_date,
-                v.created_at, v.updated_at, v.deleted_at,
-                v.arch, v.package_format, v.requires_extract, v.entrypoint_template, v.extract_root
-            FROM versions v
-            INNER JOIN version_types vt ON v.type_id = vt.id
-            WHERE vt.type_code LIKE 'SIMPRINT_KERNEL_%'
-              AND vt.is_active = true
-              AND v.status = 'active'
-              AND v.deleted_at IS NULL
-            ORDER BY vt.type_code, v.resource_name,
-                     v.is_latest DESC,
-                     COALESCE(v.pub_date, v.created_at) DESC NULLS LAST,
-                     v.id DESC
-            "#,
-        )
-        .fetch_all(pool)
-        .await?
+    const SELECT_AND_ORDER: &str = r#"
+        SELECT DISTINCT ON (vt.type_code, v.resource_name)
+            vt.type_code,
+            v.id, v.type_id, v.resource_name, v.version, v.name, v.notes,
+            v.platform, v.url, v.hash, v.signature, v.install_path,
+            v.file_size, v.is_latest, v.status, v.pub_date,
+            v.created_at, v.updated_at, v.deleted_at,
+            v.arch, v.package_format, v.requires_extract, v.entrypoint_template, v.extract_root
+        FROM versions v
+        INNER JOIN version_types vt ON v.type_id = vt.id
+    "#;
+
+    let results: Vec<VersionWithTypeCode> = match (platform, type_code_filter) {
+        (Some(plat), Some(tc)) => {
+            sqlx::query_as(&format!(
+                "{} WHERE vt.type_code = $1 AND vt.is_active = true AND v.platform = $2 \
+                 AND v.status = 'active' AND v.deleted_at IS NULL \
+                 ORDER BY vt.type_code, v.resource_name, v.is_latest DESC, \
+                 COALESCE(v.pub_date, v.created_at) DESC NULLS LAST, v.id DESC",
+                SELECT_AND_ORDER
+            ))
+            .bind(tc)
+            .bind(plat)
+            .fetch_all(pool)
+            .await?
+        }
+        (Some(plat), None) => {
+            sqlx::query_as(&format!(
+                "{} WHERE vt.type_code LIKE 'SIMPRINT_KERNEL_%' AND vt.is_active = true \
+                 AND v.platform = $1 AND v.status = 'active' AND v.deleted_at IS NULL \
+                 ORDER BY vt.type_code, v.resource_name, v.is_latest DESC, \
+                 COALESCE(v.pub_date, v.created_at) DESC NULLS LAST, v.id DESC",
+                SELECT_AND_ORDER
+            ))
+            .bind(plat)
+            .fetch_all(pool)
+            .await?
+        }
+        (None, Some(tc)) => {
+            sqlx::query_as(&format!(
+                "{} WHERE vt.type_code = $1 AND vt.is_active = true \
+                 AND v.status = 'active' AND v.deleted_at IS NULL \
+                 ORDER BY vt.type_code, v.resource_name, v.is_latest DESC, \
+                 COALESCE(v.pub_date, v.created_at) DESC NULLS LAST, v.id DESC",
+                SELECT_AND_ORDER
+            ))
+            .bind(tc)
+            .fetch_all(pool)
+            .await?
+        }
+        (None, None) => {
+            sqlx::query_as(&format!(
+                "{} WHERE vt.type_code LIKE 'SIMPRINT_KERNEL_%' AND vt.is_active = true \
+                 AND v.status = 'active' AND v.deleted_at IS NULL \
+                 ORDER BY vt.type_code, v.resource_name, v.is_latest DESC, \
+                 COALESCE(v.pub_date, v.created_at) DESC NULLS LAST, v.id DESC",
+                SELECT_AND_ORDER
+            ))
+            .fetch_all(pool)
+            .await?
+        }
     };
 
     let converted: Vec<(String, String, Version)> = results
