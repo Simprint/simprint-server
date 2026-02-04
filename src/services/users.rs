@@ -339,6 +339,17 @@ pub async fn get_current_user_service(
         None
     };
 
+    let avatar_url = user_info
+        .avatar_hash
+        .as_ref()
+        .map(|hash| {
+            crate::utils::minios::get_objects::get_avatar_url(
+                &svc_ctx.config.minio.resource_url,
+                &svc_ctx.config.minio.avatar_bucket,
+                hash,
+            )
+        });
+
     Ok(UserResponse {
         uuid: user.uuid,
         id: user.id,
@@ -346,6 +357,7 @@ pub async fn get_current_user_service(
         email: user_info.email,
         phone: user_info.phone,
         avatar_hash: user_info.avatar_hash,
+        avatar_url,
         status: user_info.status,
         created_at: user.created_at,
         updated_at: user.updated_at,

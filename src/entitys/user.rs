@@ -76,6 +76,8 @@ pub struct RefreshTokenRequest {
 #[derive(Debug, Deserialize, Serialize, Default)]
 pub struct UpdateUserRequest {
     pub nickname: Option<String>,
+    pub phone: Option<String>,
+    pub email: Option<String>,
 }
 
 /// 修改密码请求
@@ -109,6 +111,9 @@ pub struct UserResponse {
     pub email: String,
     pub phone: Option<String>,
     pub avatar_hash: Option<String>,
+    /// 头像完整 URL（当 avatar_hash 存在时由服务端拼接）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
     pub status: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

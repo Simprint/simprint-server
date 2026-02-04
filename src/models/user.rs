@@ -362,11 +362,16 @@ pub async fn update_user_info(
     sqlx::query(
         r#"
         UPDATE user_infos
-        SET nickname = $1
-        WHERE user_uuid = $2 AND deleted_at IS NULL
+        SET nickname = COALESCE($1, nickname),
+            phone = COALESCE($2, phone),
+            email = COALESCE($3, email),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_uuid = $4 AND deleted_at IS NULL
         "#,
     )
-    .bind(&payload.nickname)
+    .bind(payload.nickname.as_deref())
+    .bind(payload.phone.as_deref())
+    .bind(payload.email.as_deref())
     .bind(user_uuid)
     .execute(pool)
     .await?;
