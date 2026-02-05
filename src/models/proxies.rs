@@ -14,12 +14,14 @@ pub async fn insert_proxy(
     proxy_type: &str,
     username: Option<&str>,
     password_encrypted: Option<&str>,
+    country: Option<&str>,
+    city: Option<&str>,
 ) -> Result<Uuid, Error> {
     let uuid: Uuid = sqlx::query_scalar(
         r#"
         INSERT INTO proxies (workspace_uuid, owner_uuid, name, host, port, proxy_type,
-                              username, password_encrypted)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                              username, password_encrypted, country, city)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING uuid;
         "#,
     )
@@ -31,6 +33,8 @@ pub async fn insert_proxy(
     .bind(proxy_type)
     .bind(username)
     .bind(password_encrypted)
+    .bind(country)
+    .bind(city)
     .fetch_one(pool)
     .await?;
 
@@ -131,6 +135,8 @@ pub async fn update_proxy(
     proxy_type: Option<&str>,
     username: Option<&str>,
     password_encrypted: Option<&str>,
+    country: Option<&str>,
+    city: Option<&str>,
 ) -> Result<(), Error> {
     sqlx::query(
         r#"
@@ -140,8 +146,10 @@ pub async fn update_proxy(
             port = COALESCE($3, port),
             proxy_type = COALESCE($4, proxy_type),
             username = COALESCE($5, username),
-            password_encrypted = COALESCE($6, password_encrypted)
-        WHERE uuid = $7 AND deleted_at IS NULL
+            password_encrypted = COALESCE($6, password_encrypted),
+            country = COALESCE($7, country),
+            city = COALESCE($8, city)
+        WHERE uuid = $9 AND deleted_at IS NULL
         "#,
     )
     .bind(name)
@@ -150,6 +158,8 @@ pub async fn update_proxy(
     .bind(proxy_type)
     .bind(username)
     .bind(password_encrypted)
+    .bind(country)
+    .bind(city)
     .bind(proxy_uuid)
     .execute(pool)
     .await?;

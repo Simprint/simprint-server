@@ -42,6 +42,8 @@ pub async fn create_proxy_service(
         &payload.proxy_type,
         payload.username.as_deref(),
         password_encrypted.as_deref(),
+        payload.country.as_deref(),
+        payload.city.as_deref(),
     )
     .await
     .map_err(|e| e.to_string())?;
@@ -133,6 +135,8 @@ pub async fn update_proxy_service(
         payload.proxy_type.as_deref(),
         payload.username.as_deref(),
         password_encrypted.as_deref(),
+        payload.country.as_deref(),
+        payload.city.as_deref(),
     )
     .await
     .map_err(|e| e.to_string())
@@ -222,6 +226,8 @@ pub async fn batch_import_proxies_service(
             &proxy.proxy_type,
             proxy.username.as_deref(),
             password_encrypted.as_deref(),
+            proxy.country.as_deref(),
+            proxy.city.as_deref(),
         )
         .await;
 

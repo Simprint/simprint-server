@@ -29,6 +29,8 @@ pub struct CreateProxyRequest {
     pub proxy_type: String,
     pub username: Option<String>,
     pub password: Option<String>,
+    pub country: Option<String>,
+    pub city: Option<String>,
     pub ssh_key: Option<String>,
     pub ssh_passphrase: Option<String>,
 }
@@ -43,6 +45,8 @@ pub struct UpdateProxyRequest {
     pub proxy_type: Option<String>,
     pub username: Option<String>,
     pub password: Option<String>,
+    pub country: Option<String>,
+    pub city: Option<String>,
 }
 
 /// 批量导入代理项（客户端已解析好的结构化数据）
@@ -54,6 +58,8 @@ pub struct BatchImportProxyItem {
     pub proxy_type: String,
     pub username: Option<String>,
     pub password: Option<String>,
+    pub country: Option<String>,
+    pub city: Option<String>,
 }
 
 /// 批量导入代理请求
