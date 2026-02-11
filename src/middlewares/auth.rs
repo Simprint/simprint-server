@@ -9,7 +9,7 @@ use axum::{
 use uuid::Uuid;
 
 use crate::{
-    middlewares::get_request_path_and_method,
+    middlewares::{extract_resource_path, get_request_path_and_method},
     services,
     state::{CurrentUser, RequestContext},
     svc_ctx::SvcCtx,
@@ -21,6 +21,10 @@ pub async fn auth(
     next: Next,
 ) -> Result<Response, StatusCode> {
     let (resource_method, resource_path) = get_request_path_and_method(&req);
+
+    // 转换为拥有所有权的 String，避免借用冲突
+    let resource_method = resource_method.to_string();
+    let resource_path = resource_path.to_string();
 
     if resource_method.eq("OPTIONS") {
         return Ok(next.run(req).await);
@@ -72,6 +76,10 @@ pub async fn auth(
         tracing::info!("auth user uuid: {}, ip: {}", uuid, ip);
 
         ctx.current_user = Some(CurrentUser { user_uuid: uuid });
+
+        // 设置资源标识符（method+业务路径）
+        let business_path = extract_resource_path(&resource_path);
+        ctx.resource_identifier = Some(format!("{}+{}", resource_method, business_path));
 
         // 获取用户信息（包含 current_workspace_uuid 和 current_team_uuid）
         let user_info = crate::models::user::fetch_user_info_by_uuid(&state.db, uuid)

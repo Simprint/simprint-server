@@ -22,6 +22,7 @@ pub mod teams;
 pub mod templates;
 pub mod workspace_quotas;
 pub mod workspaces;
+pub mod events;
 
 // route core
 pub mod route {

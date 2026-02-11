@@ -42,6 +42,9 @@ pub struct RequestContext {
     pub current_team_uuid: Option<Uuid>,
     /// 当前工作空间 UUID
     pub current_workspace_uuid: Option<Uuid>,
+    /// 资源标识符：method+path（去除 /api/v*/ 前缀，保留前导斜杠）
+    /// 例如：POST+/environments, GET+/proxies
+    pub resource_identifier: Option<String>,
 }
 
 impl RequestContext {
@@ -73,5 +76,18 @@ impl RequestContext {
     /// 获取工作空间 UUID，如果不存在则 panic
     pub fn workspace_uuid_unwrap(&self) -> Uuid {
         self.current_workspace_uuid.expect("工作空间未设置")
+    }
+
+    /// 获取资源标识符
+    pub fn resource_identifier(&self) -> Option<&str> {
+        self.resource_identifier.as_deref()
+    }
+
+    /// 获取资源路径（从资源标识符中提取路径部分）
+    /// 例如：POST+/environments -> /environments
+    pub fn resource_path(&self) -> Option<&str> {
+        self.resource_identifier.as_ref().and_then(|id| {
+            id.split_once('+').map(|(_, path)| path)
+        })
     }
 }

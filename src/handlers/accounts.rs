@@ -1,5 +1,6 @@
 use axum::{extract::Extension, extract::State};
 
+use crate::dto::events::{EntityType, EventType};
 use crate::entitys::{
     AccountListResponse, BatchImportAccountsRequest, BatchImportResponse, BatchUuidRequest,
     CreateAccountRequest, CreateResponse, ListAccountsRequest, UpdateAccountRequest, UuidRequest,
@@ -70,6 +71,20 @@ pub async fn create_account_handler(
     .await
     .map_err(|e| Response::fail(Some(&e)))?;
 
+    // 发布账号创建事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Created,
+        EntityType::Account,
+        Some(account_uuid),
+        vec!["accounts/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布账号创建事件失败: {}", e);
+    }
+
     Ok(Response::success(
         Some("创建成功"),
         Some(CreateResponse { uuid: account_uuid }),
@@ -79,11 +94,26 @@ pub async fn create_account_handler(
 /// 更新账号
 pub async fn update_account_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<UpdateAccountRequest>,
 ) -> Result<()> {
     services::accounts::update_account_service(&svc_ctx, &payload)
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布账号更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Account,
+        Some(payload.uuid),
+        vec!["accounts/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布账号更新事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("更新成功"), None))
 }
@@ -91,11 +121,26 @@ pub async fn update_account_handler(
 /// 删除账号
 pub async fn delete_account_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<UuidRequest>,
 ) -> Result<()> {
     services::accounts::delete_account_service(&svc_ctx, payload.uuid)
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布账号删除事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Deleted,
+        EntityType::Account,
+        Some(payload.uuid),
+        vec!["accounts/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布账号删除事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("删除成功"), None))
 }
@@ -103,11 +148,26 @@ pub async fn delete_account_handler(
 /// 批量删除账号
 pub async fn batch_delete_accounts_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<BatchUuidRequest>,
 ) -> Result<u64> {
     let count = services::accounts::batch_delete_accounts_service(&svc_ctx, &payload.uuids)
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布批量删除账号事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Deleted,
+        EntityType::Account,
+        None,
+        vec!["accounts/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布批量删除账号事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("删除成功"), Some(count)))
 }

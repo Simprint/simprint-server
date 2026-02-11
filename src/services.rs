@@ -36,6 +36,7 @@ pub mod templates;
 pub mod wallet;
 pub mod workspace_quotas;
 pub mod workspaces;
+pub mod events;
 
 pub use gray_releases::*;
 pub use gray_resources::*;

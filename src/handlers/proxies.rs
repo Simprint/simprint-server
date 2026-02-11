@@ -1,6 +1,7 @@
 use axum::{extract::Extension, extract::State};
 
 use crate::audit_log;
+use crate::dto::events::{EntityType, EventType};
 use crate::entitys::{
     BatchImportProxiesRequest, BatchImportResponse, BatchUuidRequest, CreateProxyRequest,
     CreateResponse, ListProxiesRequest, ProxyListResponse, UpdateProxyRequest, UuidRequest,
@@ -71,6 +72,20 @@ pub async fn create_proxy_handler(
     )
     .await;
 
+    // 发布代理创建事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Created,
+        EntityType::Proxy,
+        Some(proxy_uuid),
+        vec!["proxies/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布代理创建事件失败: {}", e);
+    }
+
     Ok(Response::success(
         Some("创建成功"),
         Some(CreateResponse { uuid: proxy_uuid }),
@@ -80,11 +95,26 @@ pub async fn create_proxy_handler(
 /// 更新代理
 pub async fn update_proxy_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<UpdateProxyRequest>,
 ) -> Result<()> {
     services::proxies::update_proxy_service(&svc_ctx, &payload)
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布代理更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Proxy,
+        Some(payload.uuid),
+        vec!["proxies/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布代理更新事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("更新成功"), None))
 }
@@ -100,6 +130,20 @@ pub async fn delete_proxy_handler(
         .map_err(|e| Response::fail(Some(&e)))?;
 
     audit_log!(&svc_ctx, &ctx, "delete", "proxy", payload.uuid, "删除代理").await;
+
+    // 发布代理删除事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Deleted,
+        EntityType::Proxy,
+        Some(payload.uuid),
+        vec!["proxies/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布代理删除事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("删除成功"), None))
 }
@@ -122,6 +166,20 @@ pub async fn batch_delete_proxies_handler(
         &format!("批量删除 {} 个代理", count)
     )
     .await;
+
+    // 发布批量删除代理事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Deleted,
+        EntityType::Proxy,
+        None,
+        vec!["proxies/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布批量删除代理事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("删除成功"), Some(count)))
 }

@@ -1,6 +1,7 @@
 use axum::{extract::Extension, extract::State};
 
 use crate::audit_log;
+use crate::dto::events::{EntityType, EventType};
 use crate::entitys::{
     AddEnvironmentCookieRequest, AddEnvironmentUrlRequest, AssignTagsRequest,
     BatchAssignTagRequest, BatchCreateEnvironmentRequest, BatchMoveToGroupRequest,
@@ -126,6 +127,20 @@ pub async fn delete_group_handler(
 
     audit_log!(&svc_ctx, &ctx, "delete", "group", payload.uuid, "删除分组").await;
 
+    // 发布分组删除事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Deleted,
+        EntityType::Group,
+        Some(payload.uuid),
+        vec!["groups/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布分组删除事件失败: {}", e);
+    }
+
     Ok(Response::success(Some("删除成功"), None))
 }
 
@@ -157,6 +172,20 @@ pub async fn create_tag_handler(
     )
     .await;
 
+    // 发布标签创建事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Created,
+        EntityType::Tag,
+        Some(tag_uuid),
+        vec!["tags/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布标签创建事件失败: {}", e);
+    }
+
     Ok(Response::success(
         Some("创建成功"),
         Some(CreateResponse { uuid: tag_uuid }),
@@ -182,11 +211,26 @@ pub async fn get_tags_handler(
 /// 更新标签
 pub async fn update_tag_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<UpdateTagRequest>,
 ) -> Result<()> {
     services::tags::update_tag_service(&svc_ctx, &payload)
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布标签更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Tag,
+        Some(payload.uuid),
+        vec!["tags/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布标签更新事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("更新成功"), None))
 }
@@ -202,6 +246,20 @@ pub async fn delete_tag_handler(
         .map_err(|e| Response::fail(Some(&e)))?;
 
     audit_log!(&svc_ctx, &ctx, "delete", "tag", payload.uuid, "删除标签").await;
+
+    // 发布标签删除事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Deleted,
+        EntityType::Tag,
+        Some(payload.uuid),
+        vec!["tags/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布标签删除事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("删除成功"), None))
 }
@@ -336,6 +394,20 @@ pub async fn create_environment_handler(
     )
     .await;
 
+    // 发布环境创建事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Created,
+        EntityType::Environment,
+        Some(env_uuid),
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布环境创建事件失败: {}", e);
+    }
+
     Ok(Response::success(
         Some("创建成功"),
         Some(CreateResponse { uuid: env_uuid }),
@@ -376,6 +448,20 @@ pub async fn batch_create_environments_handler(
     )
     .await;
 
+    // 发布批量创建环境事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Created,
+        EntityType::Environment,
+        None,
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布批量创建环境事件失败: {}", e);
+    }
+
     Ok(Response::success(Some("批量创建成功"), Some(responses)))
 }
 
@@ -399,6 +485,20 @@ pub async fn update_environment_handler(
     )
     .await
     .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布环境更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Environment,
+        Some(payload.uuid),
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布环境更新事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("更新成功"), None))
 }
@@ -434,6 +534,20 @@ pub async fn delete_environment_handler(
     )
     .await;
 
+    // 发布环境删除事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Deleted,
+        EntityType::Environment,
+        Some(payload.uuid),
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布环境删除事件失败: {}", e);
+    }
+
     Ok(Response::success(Some("删除成功"), None))
 }
 
@@ -456,17 +570,46 @@ pub async fn batch_delete_environments_handler(
     )
     .await;
 
+    // 发布批量删除环境事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Deleted,
+        EntityType::Environment,
+        None,
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布批量删除环境事件失败: {}", e);
+    }
+
     Ok(Response::success(Some("删除成功"), Some(count)))
 }
 
 /// 设置环境代理
 pub async fn set_proxy_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<SetEnvironmentProxyRequest>,
 ) -> Result<()> {
     services::environments::set_environment_proxy_service(&svc_ctx, &payload)
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布环境更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Environment,
+        Some(payload.uuid),
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布环境更新事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("设置成功"), None))
 }
@@ -474,11 +617,26 @@ pub async fn set_proxy_handler(
 /// 分配标签
 pub async fn assign_tags_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<AssignTagsRequest>,
 ) -> Result<()> {
     services::environments::assign_tags_service(&svc_ctx, &payload)
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布环境更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Environment,
+        Some(payload.uuid),
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布环境更新事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("分配成功"), None))
 }
@@ -486,11 +644,26 @@ pub async fn assign_tags_handler(
 /// 移除标签
 pub async fn remove_tag_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<RemoveTagRequest>,
 ) -> Result<()> {
     services::environments::remove_tag_service(&svc_ctx, payload.uuid, payload.tag_uuid)
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布环境更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Environment,
+        Some(payload.uuid),
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布环境更新事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("移除成功"), None))
 }
@@ -498,11 +671,26 @@ pub async fn remove_tag_handler(
 /// 移动到分组
 pub async fn move_to_group_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<MoveToGroupRequest>,
 ) -> Result<()> {
     services::environments::move_to_group_service(&svc_ctx, &payload)
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布环境更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Environment,
+        Some(payload.uuid),
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布环境更新事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("移动成功"), None))
 }
@@ -510,11 +698,26 @@ pub async fn move_to_group_handler(
 /// 批量移动到分组
 pub async fn batch_move_to_group_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<BatchMoveToGroupRequest>,
 ) -> Result<()> {
     services::environments::batch_move_to_group_service(&svc_ctx, &payload)
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布批量环境更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Environment,
+        None,
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布批量环境更新事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("移动成功"), None))
 }
@@ -522,6 +725,7 @@ pub async fn batch_move_to_group_handler(
 /// 设置环境账号
 pub async fn set_environment_accounts_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<SetEnvironmentAccountsRequest>,
 ) -> Result<()> {
     services::accounts::set_environment_accounts_service(
@@ -532,17 +736,46 @@ pub async fn set_environment_accounts_handler(
     .await
     .map_err(|e| Response::fail(Some(&e)))?;
 
+    // 发布环境更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Environment,
+        Some(payload.uuid),
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布环境更新事件失败: {}", e);
+    }
+
     Ok(Response::success(Some("设置成功"), None))
 }
 
 /// 批量分配标签
 pub async fn batch_assign_tags_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<BatchAssignTagRequest>,
 ) -> Result<()> {
     services::environments::batch_assign_tags_service(&svc_ctx, &payload)
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布批量环境更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Environment,
+        None,
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布批量环境更新事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("分配成功"), None))
 }
@@ -550,11 +783,26 @@ pub async fn batch_assign_tags_handler(
 /// 批量移除标签
 pub async fn batch_remove_tags_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<BatchRemoveTagsRequest>,
 ) -> Result<()> {
     services::environments::batch_remove_tags_service(&svc_ctx, &payload)
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布批量环境更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Environment,
+        None,
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布批量环境更新事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("移除成功"), None))
 }
@@ -564,11 +812,26 @@ pub async fn batch_remove_tags_handler(
 /// 添加环境 URL
 pub async fn add_environment_url_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<AddEnvironmentUrlRequest>,
 ) -> Result<IdResponse> {
     let id = services::environments::add_environment_url_service(&svc_ctx, &payload)
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布环境更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Environment,
+        Some(payload.environment_uuid),
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布环境更新事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("添加成功"), Some(IdResponse { id })))
 }
@@ -588,11 +851,26 @@ pub async fn get_environment_urls_handler(
 /// 删除环境 URL
 pub async fn delete_environment_url_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<DeleteEnvironmentUrlRequest>,
 ) -> Result<()> {
     services::environments::delete_environment_url_service(&svc_ctx, payload.id)
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布环境更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Environment,
+        None,
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布环境更新事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("删除成功"), None))
 }
@@ -600,12 +878,27 @@ pub async fn delete_environment_url_handler(
 /// 清空环境 URL
 pub async fn clear_environment_urls_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<ClearEnvironmentUrlsRequest>,
 ) -> Result<u64> {
     let count =
         services::environments::clear_environment_urls_service(&svc_ctx, payload.environment_uuid)
             .await
             .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布环境更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Environment,
+        Some(payload.environment_uuid),
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布环境更新事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("清空成功"), Some(count)))
 }
@@ -615,11 +908,26 @@ pub async fn clear_environment_urls_handler(
 /// 添加环境 Cookie
 pub async fn add_environment_cookie_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<AddEnvironmentCookieRequest>,
 ) -> Result<IdResponse> {
     let id = services::environments::add_environment_cookie_service(&svc_ctx, &payload)
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布环境更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Environment,
+        Some(payload.environment_uuid),
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布环境更新事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("添加成功"), Some(IdResponse { id })))
 }
@@ -639,11 +947,26 @@ pub async fn get_environment_cookies_handler(
 /// 删除环境 Cookie
 pub async fn delete_environment_cookie_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<DeleteEnvironmentCookieRequest>,
 ) -> Result<()> {
     services::environments::delete_environment_cookie_service(&svc_ctx, payload.id)
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布环境更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Environment,
+        None,
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布环境更新事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("删除成功"), None))
 }
@@ -651,6 +974,7 @@ pub async fn delete_environment_cookie_handler(
 /// 清空环境 Cookies
 pub async fn clear_environment_cookies_handler(
     State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<ClearEnvironmentCookiesRequest>,
 ) -> Result<u64> {
     let count = services::environments::clear_environment_cookies_service(
@@ -659,6 +983,20 @@ pub async fn clear_environment_cookies_handler(
     )
     .await
     .map_err(|e| Response::fail(Some(&e)))?;
+
+    // 发布环境更新事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Environment,
+        Some(payload.environment_uuid),
+        vec!["environments/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布环境更新事件失败: {}", e);
+    }
 
     Ok(Response::success(Some("清空成功"), Some(count)))
 }

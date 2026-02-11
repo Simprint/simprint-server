@@ -5,7 +5,7 @@ use simprint_server::{init_encrypt_secret, init_minio};
 use simprint_server::{
     middlewares,
     routes::{
-        accounts, api, audit, billing, browser_kernel, environments, extensions,
+        accounts, api, audit, billing, browser_kernel, environments, events, extensions,
         group_permissions, messages,
         preferences, proxies, proxy_visibility, referral, rpa, secret, teams, templates, time,
         users, workspace_quotas, workspaces,
@@ -88,6 +88,7 @@ fn register_all_routes(svc_ctx: &SvcCtx) -> Router<SvcCtx> {
     api::register_routes(&mut meta_route);
     preferences::register_routes(&mut meta_route);
     messages::register_routes(&mut meta_route);
+    events::register_routes(&mut meta_route);
 
     tracing::info!("---------- {:?} ----------", meta_route.count());
     meta_route.build()
