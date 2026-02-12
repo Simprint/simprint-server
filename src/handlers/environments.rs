@@ -587,6 +587,198 @@ pub async fn batch_delete_environments_handler(
     Ok(Response::success(Some("删除成功"), Some(count)))
 }
 
+// ============ Recycle Bin ============
+
+/// 查询回收站环境列表
+pub async fn get_recycle_bin_environments_handler(
+    State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
+    Json(payload): Json<ListEnvironmentsRequest>,
+) -> Result<EnvironmentListResponse> {
+    let workspace_uuid = ctx
+        .current_workspace_uuid
+        .ok_or_else(|| Response::fail(Some("请先选择工作空间")))?;
+    let team_uuid = ctx.current_team_uuid.ok_or_else(|| Response::fail(Some("请先选择团队")))?;
+
+    let (environments, total) = services::environments::get_recycle_bin_environments_service(
+        &svc_ctx,
+        workspace_uuid,
+        team_uuid,
+        ctx.user_uuid_unwrap(),
+        &payload,
+    )
+    .await
+    .map_err(|e| Response::fail(Some(&e)))?;
+
+    Ok(Response::success(
+        None,
+        Some(EnvironmentListResponse {
+            items: environments,
+            total,
+            page: payload.pagination.page,
+            page_size: payload.pagination.page_size,
+        }),
+    ))
+}
+
+/// 恢复环境
+pub async fn restore_environment_handler(
+    State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
+    Json(payload): Json<UuidRequest>,
+) -> Result<()> {
+    services::environments::restore_environment_service(&svc_ctx, payload.uuid)
+        .await
+        .map_err(|e| Response::fail(Some(&e)))?;
+
+    audit_log!(
+        &svc_ctx,
+        &ctx,
+        "restore",
+        "environment",
+        payload.uuid,
+        "恢复环境"
+    )
+    .await;
+
+    // 发布恢复环境事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Environment,
+        Some(payload.uuid),
+        vec!["environments/list".to_string(), "recycle-bin/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布恢复环境事件失败: {}", e);
+    }
+
+    Ok(Response::success(Some("恢复成功"), None))
+}
+
+/// 批量恢复环境
+pub async fn batch_restore_environments_handler(
+    State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
+    Json(payload): Json<BatchUuidRequest>,
+) -> Result<u64> {
+    let count = services::environments::batch_restore_environments_service(&svc_ctx, &payload.uuids)
+        .await
+        .map_err(|e| Response::fail(Some(&e)))?;
+
+    audit_log!(
+        &svc_ctx,
+        &ctx,
+        "batch_restore",
+        "environment",
+        &format!("批量恢复 {} 个环境", count)
+    )
+    .await;
+
+    // 发布批量恢复环境事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Updated,
+        EntityType::Environment,
+        None,
+        vec!["environments/list".to_string(), "recycle-bin/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布批量恢复环境事件失败: {}", e);
+    }
+
+    Ok(Response::success(Some("恢复成功"), Some(count)))
+}
+
+/// 永久删除环境
+pub async fn permanent_delete_environment_handler(
+    State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
+    Json(payload): Json<UuidRequest>,
+) -> Result<()> {
+    let workspace_uuid = ctx
+        .current_workspace_uuid
+        .ok_or_else(|| Response::fail(Some("请先选择工作空间")))?;
+
+    services::environments::permanent_delete_environment_service(&svc_ctx, payload.uuid, workspace_uuid)
+        .await
+        .map_err(|e| Response::fail(Some(&e)))?;
+
+    audit_log!(
+        &svc_ctx,
+        &ctx,
+        "permanent_delete",
+        "environment",
+        payload.uuid,
+        "永久删除环境"
+    )
+    .await;
+
+    // 发布永久删除环境事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Deleted,
+        EntityType::Environment,
+        Some(payload.uuid),
+        vec!["recycle-bin/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布永久删除环境事件失败: {}", e);
+    }
+
+    Ok(Response::success(Some("永久删除成功"), None))
+}
+
+/// 批量永久删除环境
+pub async fn batch_permanent_delete_environments_handler(
+    State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
+    Json(payload): Json<BatchUuidRequest>,
+) -> Result<u64> {
+    let workspace_uuid = ctx
+        .current_workspace_uuid
+        .ok_or_else(|| Response::fail(Some("请先选择工作空间")))?;
+
+    let count = services::environments::batch_permanent_delete_environments_service(
+        &svc_ctx,
+        &payload.uuids,
+        workspace_uuid,
+    )
+    .await
+    .map_err(|e| Response::fail(Some(&e)))?;
+
+    audit_log!(
+        &svc_ctx,
+        &ctx,
+        "batch_permanent_delete",
+        "environment",
+        &format!("批量永久删除 {} 个环境", count)
+    )
+    .await;
+
+    // 发布批量永久删除环境事件
+    if let Err(e) = services::events::EventService::publish_from_context(
+        &svc_ctx,
+        &ctx,
+        EventType::Deleted,
+        EntityType::Environment,
+        None,
+        vec!["recycle-bin/list".to_string()],
+    )
+    .await
+    {
+        tracing::error!("发布批量永久删除环境事件失败: {}", e);
+    }
+
+    Ok(Response::success(Some("永久删除成功"), Some(count)))
+}
+
 /// 设置环境代理
 pub async fn set_proxy_handler(
     State(svc_ctx): State<SvcCtx>,

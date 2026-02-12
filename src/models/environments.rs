@@ -686,6 +686,250 @@ pub async fn batch_delete_environments(
     Ok(result.rows_affected())
 }
 
+// ============ Recycle Bin ============
+
+/// 查询回收站环境列表（已删除但未永久删除）
+pub async fn fetch_deleted_environments_base(
+    pool: &Pool<Postgres>,
+    workspace_uuid: Uuid,
+    team_uuid: Uuid,
+    group_uuid: Option<Uuid>,
+    keyword: Option<&str>,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<EnvironmentRowDto>, Error> {
+    let mut query = String::from(
+        r#"
+        SELECT DISTINCT
+            e.id, e.uuid, e.workspace_uuid, e.user_uuid, e.team_uuid, e.name, e.description, e.status,
+            e.system_info, e.kernel_info, e.fingerprint_summary,
+            e.group_uuid, e.proxy_uuid,
+            e.last_opened_at, e.created_at, e.updated_at, e.deleted_at
+        FROM environments e
+        WHERE e.workspace_uuid = $1
+          AND e.team_uuid = $2
+          AND e.deleted_at IS NOT NULL
+        "#,
+    );
+
+    let mut param_index = 3;
+    let mut conditions = Vec::new();
+
+    // 分组过滤
+    if group_uuid.is_some() {
+        conditions.push(format!("e.group_uuid = ${}", param_index));
+        param_index += 1;
+    }
+
+    // 关键词搜索
+    if keyword.is_some() {
+        conditions.push(format!("(e.name ILIKE ${} OR e.uuid::text ILIKE ${})", param_index, param_index));
+        param_index += 1;
+    }
+
+    if !conditions.is_empty() {
+        query.push_str(" AND ");
+        query.push_str(&conditions.join(" AND "));
+    }
+
+    query.push_str(" ORDER BY e.deleted_at DESC LIMIT $");
+    query.push_str(&param_index.to_string());
+    param_index += 1;
+    query.push_str(" OFFSET $");
+    query.push_str(&param_index.to_string());
+
+    let mut q = sqlx::query_as::<_, EnvironmentRowDto>(&query)
+        .bind(workspace_uuid)
+        .bind(team_uuid);
+
+    if let Some(gid) = group_uuid {
+        q = q.bind(gid);
+    }
+
+    if let Some(kw) = keyword {
+        let pattern = format!("%{}%", kw);
+        q = q.bind(pattern);
+    }
+
+    q = q.bind(limit).bind(offset);
+
+    let recs = q.fetch_all(pool).await?;
+    Ok(recs)
+}
+
+/// 统计回收站环境总数
+pub async fn fetch_deleted_environments_count(
+    pool: &Pool<Postgres>,
+    workspace_uuid: Uuid,
+    team_uuid: Uuid,
+    group_uuid: Option<Uuid>,
+    keyword: Option<&str>,
+) -> Result<i64, Error> {
+    let mut query = String::from(
+        r#"
+        SELECT COUNT(DISTINCT e.id)
+        FROM environments e
+        WHERE e.workspace_uuid = $1
+          AND e.team_uuid = $2
+          AND e.deleted_at IS NOT NULL
+        "#,
+    );
+
+    let mut param_index = 3;
+    let mut conditions = Vec::new();
+
+    if group_uuid.is_some() {
+        conditions.push(format!("e.group_uuid = ${}", param_index));
+        param_index += 1;
+    }
+
+    if keyword.is_some() {
+        conditions.push(format!("(e.name ILIKE ${} OR e.uuid::text ILIKE ${})", param_index, param_index));
+        param_index += 1;
+    }
+
+    if !conditions.is_empty() {
+        query.push_str(" AND ");
+        query.push_str(&conditions.join(" AND "));
+    }
+
+    let mut q = sqlx::query_scalar::<_, i64>(&query)
+        .bind(workspace_uuid)
+        .bind(team_uuid);
+
+    if let Some(gid) = group_uuid {
+        q = q.bind(gid);
+    }
+
+    if let Some(kw) = keyword {
+        let pattern = format!("%{}%", kw);
+        q = q.bind(pattern);
+    }
+
+    let count = q.fetch_one(pool).await?;
+    Ok(count)
+}
+
+/// 恢复环境（将 deleted_at 设为 NULL）
+pub async fn restore_environment(pool: &Pool<Postgres>, env_uuid: Uuid) -> Result<(), Error> {
+    sqlx::query(
+        r#"
+        UPDATE environments SET deleted_at = NULL
+        WHERE uuid = $1 AND deleted_at IS NOT NULL
+        "#,
+    )
+    .bind(env_uuid)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+/// 批量恢复环境
+pub async fn batch_restore_environments(
+    pool: &Pool<Postgres>,
+    env_uuids: &[Uuid],
+) -> Result<u64, Error> {
+    let result = sqlx::query(
+        r#"
+        UPDATE environments SET deleted_at = NULL
+        WHERE uuid = ANY($1) AND deleted_at IS NOT NULL
+        "#,
+    )
+    .bind(env_uuids)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
+/// 永久删除环境（真正的 DELETE）
+pub async fn permanent_delete_environment(pool: &Pool<Postgres>, env_uuid: Uuid) -> Result<(), Error> {
+    // 先删除关联数据
+    sqlx::query("DELETE FROM environment_tags WHERE environment_uuid = $1")
+        .bind(env_uuid)
+        .execute(pool)
+        .await?;
+
+    sqlx::query("DELETE FROM environment_urls WHERE environment_uuid = $1")
+        .bind(env_uuid)
+        .execute(pool)
+        .await?;
+
+    sqlx::query("DELETE FROM environment_cookies WHERE environment_uuid = $1")
+        .bind(env_uuid)
+        .execute(pool)
+        .await?;
+
+    sqlx::query("DELETE FROM environment_configs WHERE environment_uuid = $1")
+        .bind(env_uuid)
+        .execute(pool)
+        .await?;
+
+    sqlx::query("DELETE FROM environment_accounts WHERE environment_uuid = $1")
+        .bind(env_uuid)
+        .execute(pool)
+        .await?;
+
+    sqlx::query("DELETE FROM environment_extensions WHERE environment_uuid = $1")
+        .bind(env_uuid)
+        .execute(pool)
+        .await?;
+
+    // 最后删除环境本身
+    sqlx::query("DELETE FROM environments WHERE uuid = $1")
+        .bind(env_uuid)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
+/// 批量永久删除环境
+pub async fn batch_permanent_delete_environments(
+    pool: &Pool<Postgres>,
+    env_uuids: &[Uuid],
+) -> Result<u64, Error> {
+    // 先删除关联数据
+    sqlx::query("DELETE FROM environment_tags WHERE environment_uuid = ANY($1)")
+        .bind(env_uuids)
+        .execute(pool)
+        .await?;
+
+    sqlx::query("DELETE FROM environment_urls WHERE environment_uuid = ANY($1)")
+        .bind(env_uuids)
+        .execute(pool)
+        .await?;
+
+    sqlx::query("DELETE FROM environment_cookies WHERE environment_uuid = ANY($1)")
+        .bind(env_uuids)
+        .execute(pool)
+        .await?;
+
+    sqlx::query("DELETE FROM environment_configs WHERE environment_uuid = ANY($1)")
+        .bind(env_uuids)
+        .execute(pool)
+        .await?;
+
+    sqlx::query("DELETE FROM environment_accounts WHERE environment_uuid = ANY($1)")
+        .bind(env_uuids)
+        .execute(pool)
+        .await?;
+
+    sqlx::query("DELETE FROM environment_extensions WHERE environment_uuid = ANY($1)")
+        .bind(env_uuids)
+        .execute(pool)
+        .await?;
+
+    // 最后删除环境本身
+    let result = sqlx::query("DELETE FROM environments WHERE uuid = ANY($1)")
+        .bind(env_uuids)
+        .execute(pool)
+        .await?;
+
+    Ok(result.rows_affected())
+}
+
 // ============ Environment Configs ============
 
 /// 创建或更新环境配置

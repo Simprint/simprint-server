@@ -875,6 +875,239 @@ pub async fn batch_delete_environments_service(
         .map_err(|e| e.to_string())
 }
 
+// ============ Recycle Bin ============
+
+/// 查询回收站环境列表
+pub async fn get_recycle_bin_environments_service(
+    svc_ctx: &SvcCtx,
+    workspace_uuid: Uuid,
+    team_uuid: Uuid,
+    user_uuid: Uuid,
+    payload: &ListEnvironmentsRequest,
+) -> Result<(Vec<crate::entitys::EnvironmentDetailResponse>, i64), String> {
+    // 1. 提取过滤参数
+    let group_uuid = payload.filters.as_ref().and_then(|f| f.group_uuid);
+    let keyword = payload.filters.as_ref().and_then(|f| f.keyword.as_deref());
+
+    // 2. 计算分页参数
+    let page = payload.pagination.page;
+    let page_size = payload.pagination.page_size;
+    let offset = (page - 1) * page_size;
+    let limit = page_size;
+
+    // 3. 查询回收站环境总数
+    let total_count = models::fetch_deleted_environments_count(
+        &svc_ctx.db,
+        workspace_uuid,
+        team_uuid,
+        group_uuid,
+        keyword,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // 4. 查询回收站环境基础列表
+    let env_rows = models::fetch_deleted_environments_base(
+        &svc_ctx.db,
+        workspace_uuid,
+        team_uuid,
+        group_uuid,
+        keyword,
+        offset,
+        limit,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    if env_rows.is_empty() {
+        return Ok((vec![], total_count));
+    }
+
+    // 5. 获取所有环境的 UUID
+    let env_uuids: Vec<Uuid> = env_rows.iter().map(|e| e.uuid).collect();
+    let group_uuids: Vec<Uuid> = env_rows.iter().filter_map(|e| e.group_uuid).collect();
+    let proxy_uuids: Vec<Uuid> = env_rows.iter().filter_map(|e| e.proxy_uuid).collect();
+
+    // 6. 批量查询分组信息
+    let group_rows = if !group_uuids.is_empty() {
+        models::fetch_groups_by_uuids(&svc_ctx.db, &group_uuids)
+            .await
+            .map_err(|e| e.to_string())?
+    } else {
+        vec![]
+    };
+    let group_map: HashMap<Uuid, GroupSummaryDto> = group_rows
+        .into_iter()
+        .map(|g| (g.uuid, GroupSummaryDto {
+            id: g.id,
+            uuid: g.uuid,
+            name: g.name,
+            description: g.description,
+            sort_order: g.sort_order,
+        }))
+        .collect();
+
+    // 7. 批量查询代理信息
+    let proxy_rows = if !proxy_uuids.is_empty() {
+        models::fetch_proxies_by_uuids(&svc_ctx.db, &proxy_uuids)
+            .await
+            .map_err(|e| e.to_string())?
+    } else {
+        vec![]
+    };
+    let proxy_map: HashMap<Uuid, ProxySummaryDto> = proxy_rows
+        .into_iter()
+        .map(|p| (p.uuid, ProxySummaryDto {
+            id: p.id,
+            uuid: p.uuid,
+            name: p.name,
+            host: p.host,
+            port: p.port,
+            proxy_type: p.proxy_type,
+            country: p.country,
+            city: p.city,
+            status: p.status,
+            latency: p.latency,
+            last_check_ip: p.last_check_ip,
+        }))
+        .collect();
+
+    // 8. 批量查询标签信息
+    let tag_rows = if !env_uuids.is_empty() {
+        models::fetch_tags_for_environments(&svc_ctx.db, &env_uuids)
+            .await
+            .map_err(|e| e.to_string())?
+    } else {
+        vec![]
+    };
+    let mut env_tags_map: HashMap<Uuid, Vec<TagDto>> = HashMap::new();
+    for tag_row in tag_rows {
+        env_tags_map.entry(tag_row.environment_uuid).or_default().push(TagDto {
+            id: tag_row.tag_id,
+            uuid: tag_row.tag_uuid,
+            user_uuid: tag_row.tag_user_uuid,
+            team_uuid: tag_row.tag_team_uuid,
+            name: tag_row.tag_name,
+            color: tag_row.tag_color,
+            sort_order: tag_row.tag_sort_order,
+            environments_count: tag_row.tag_environments_count,
+            created_at: tag_row.tag_created_at,
+            updated_at: tag_row.tag_updated_at,
+            deleted_at: tag_row.tag_deleted_at,
+        });
+    }
+
+    // 9. 批量查询账号信息
+    let mut env_accounts_map: HashMap<Uuid, Vec<PlatformAccountDto>> = HashMap::new();
+    for env_uuid in &env_uuids {
+        let accounts = accounts::get_environment_accounts_service(svc_ctx, *env_uuid)
+            .await
+            .unwrap_or_default();
+        if !accounts.is_empty() {
+            env_accounts_map.insert(*env_uuid, accounts);
+        }
+    }
+
+    // 10. 组装完整的环境信息
+    let environments: Vec<crate::entitys::EnvironmentDetailResponse> = env_rows
+        .into_iter()
+        .map(|row| {
+            let group = row.group_uuid.and_then(|gid| group_map.get(&gid).cloned());
+            let proxy = row.proxy_uuid.and_then(|pid| proxy_map.get(&pid).cloned());
+            let tags = env_tags_map.get(&row.uuid).cloned().unwrap_or_default();
+            let accounts = env_accounts_map.get(&row.uuid).cloned().unwrap_or_default();
+
+            crate::entitys::EnvironmentDetailResponse {
+                environment: EnvironmentDto {
+                    id: row.id,
+                    uuid: row.uuid,
+                    workspace_uuid: row.workspace_uuid,
+                    user_uuid: row.user_uuid,
+                    team_uuid: row.team_uuid,
+                    name: row.name,
+                    description: row.description,
+                    status: row.status,
+                    group_uuid: row.group_uuid,
+                    proxy_uuid: row.proxy_uuid,
+                    system_info: row.system_info,
+                    kernel_info: row.kernel_info,
+                    fingerprint_summary: row.fingerprint_summary,
+                    last_opened_at: row.last_opened_at,
+                    created_at: row.created_at,
+                    updated_at: row.updated_at,
+                    deleted_at: None,
+                },
+                config: None,
+                tags,
+                accounts,
+                group,
+                proxy,
+            }
+        })
+        .collect();
+
+    Ok((environments, total_count))
+}
+
+/// 恢复环境
+pub async fn restore_environment_service(
+    svc_ctx: &SvcCtx,
+    env_uuid: Uuid,
+) -> Result<(), String> {
+    models::restore_environment(&svc_ctx.db, env_uuid)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 批量恢复环境
+pub async fn batch_restore_environments_service(
+    svc_ctx: &SvcCtx,
+    env_uuids: &[Uuid],
+) -> Result<u64, String> {
+    models::batch_restore_environments(&svc_ctx.db, env_uuids)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 永久删除环境
+pub async fn permanent_delete_environment_service(
+    svc_ctx: &SvcCtx,
+    env_uuid: Uuid,
+    workspace_uuid: Uuid,
+) -> Result<(), String> {
+    // 永久删除环境
+    models::permanent_delete_environment(&svc_ctx.db, env_uuid)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // 更新工作空间配额（永久删除后减少使用数）
+    models::decrement_used_environments(&svc_ctx.db, workspace_uuid, 1)
+        .await
+        .map_err(|e| format!("更新配额失败: {}", e))?;
+
+    Ok(())
+}
+
+/// 批量永久删除环境
+pub async fn batch_permanent_delete_environments_service(
+    svc_ctx: &SvcCtx,
+    env_uuids: &[Uuid],
+    workspace_uuid: Uuid,
+) -> Result<u64, String> {
+    let count = models::batch_permanent_delete_environments(&svc_ctx.db, env_uuids)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // 更新工作空间配额
+    if count > 0 {
+        models::decrement_used_environments(&svc_ctx.db, workspace_uuid, count as i32)
+            .await
+            .map_err(|e| format!("更新配额失败: {}", e))?;
+    }
+
+    Ok(count)
+}
+
 // ============ Environment URLs ============
 
 /// 添加环境 URL
