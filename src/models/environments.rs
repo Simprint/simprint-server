@@ -295,34 +295,103 @@ pub async fn fetch_environments_base(
     team_uuid: Uuid,
     group_uuid: Option<Uuid>,
     status: Option<&str>,
+    keyword: Option<&str>,
+    tag_uuids: Option<&[Uuid]>,
     offset: i64,
     limit: i64,
 ) -> Result<Vec<EnvironmentRowDto>, Error> {
-    let recs = sqlx::query_as::<_, EnvironmentRowDto>(
+    let mut query = String::from(
         r#"
-        SELECT 
-            id, uuid, workspace_uuid, user_uuid, team_uuid, name, description, status,
-            system_info, kernel_info, fingerprint_summary,
-            group_uuid, proxy_uuid,
-            last_opened_at, created_at, updated_at
-        FROM environments
-        WHERE workspace_uuid = $1
-          AND team_uuid = $2
-          AND ($3::uuid IS NULL OR group_uuid = $3)
-          AND ($4::varchar IS NULL OR status = $4)
-          AND deleted_at IS NULL
-        ORDER BY created_at DESC
-        LIMIT $5 OFFSET $6
+        SELECT DISTINCT
+            e.id, e.uuid, e.workspace_uuid, e.user_uuid, e.team_uuid, e.name, e.description, e.status,
+            e.system_info, e.kernel_info, e.fingerprint_summary,
+            e.group_uuid, e.proxy_uuid,
+            e.last_opened_at, e.created_at, e.updated_at
+        FROM environments e
         "#,
-    )
-    .bind(workspace_uuid)
-    .bind(team_uuid)
-    .bind(group_uuid)
-    .bind(status)
-    .bind(limit)
-    .bind(offset)
-    .fetch_all(pool)
-    .await?;
+    );
+
+    // 如果有标签过滤，需要 JOIN environment_tags 表
+    if tag_uuids.is_some() {
+        query.push_str(" LEFT JOIN environment_tags et ON e.uuid = et.environment_uuid ");
+    }
+
+    query.push_str(
+        r#"
+        WHERE e.workspace_uuid = $1
+          AND e.team_uuid = $2
+          AND e.deleted_at IS NULL
+        "#,
+    );
+
+    let mut param_index = 3;
+    let mut conditions = Vec::new();
+
+    // 分组过滤
+    if group_uuid.is_some() {
+        conditions.push(format!("e.group_uuid = ${}", param_index));
+        param_index += 1;
+    }
+
+    // 状态过滤
+    if status.is_some() {
+        conditions.push(format!("e.status = ${}", param_index));
+        param_index += 1;
+    }
+
+    // 关键词搜索
+    if keyword.is_some() {
+        conditions.push(format!(
+            "(e.name ILIKE ${} OR e.uuid::text ILIKE ${})",
+            param_index, param_index
+        ));
+        param_index += 1;
+    }
+
+    // 标签过滤
+    if let Some(tags) = tag_uuids {
+        if !tags.is_empty() {
+            conditions.push(format!("et.tag_uuid = ANY(${})", param_index));
+            param_index += 1;
+        }
+    }
+
+    // 添加所有条件
+    for condition in conditions {
+        query.push_str(&format!(" AND {}", condition));
+    }
+
+    query.push_str(&format!(
+        " ORDER BY e.created_at DESC LIMIT ${} OFFSET ${}",
+        param_index,
+        param_index + 1
+    ));
+
+    // 构建查询
+    let mut sql_query = sqlx::query_as::<_, EnvironmentRowDto>(&query)
+        .bind(workspace_uuid)
+        .bind(team_uuid);
+
+    // 绑定参数
+    if let Some(g) = group_uuid {
+        sql_query = sql_query.bind(g);
+    }
+    if let Some(s) = status {
+        sql_query = sql_query.bind(s);
+    }
+    if let Some(k) = keyword {
+        let search_pattern = format!("%{}%", k);
+        sql_query = sql_query.bind(search_pattern);
+    }
+    if let Some(tags) = tag_uuids {
+        if !tags.is_empty() {
+            sql_query = sql_query.bind(tags);
+        }
+    }
+
+    sql_query = sql_query.bind(limit).bind(offset);
+
+    let recs = sql_query.fetch_all(pool).await?;
 
     Ok(recs)
 }
@@ -370,22 +439,87 @@ pub async fn fetch_environments_count(
     team_uuid: Uuid,
     group_uuid: Option<Uuid>,
     status: Option<&str>,
+    keyword: Option<&str>,
+    tag_uuids: Option<&[Uuid]>,
 ) -> Result<i64, Error> {
-    let count: i64 = sqlx::query_scalar(
+    let mut query = String::from(
         r#"
-        SELECT COUNT(*) FROM environments
-        WHERE workspace_uuid = $1 AND team_uuid = $2
-          AND ($3::uuid IS NULL OR group_uuid = $3)
-          AND ($4::varchar IS NULL OR status = $4)
-          AND deleted_at IS NULL
+        SELECT COUNT(DISTINCT e.id) FROM environments e
         "#,
-    )
-    .bind(workspace_uuid)
-    .bind(team_uuid)
-    .bind(group_uuid)
-    .bind(status)
-    .fetch_one(pool)
-    .await?;
+    );
+
+    // 如果有标签过滤，需要 JOIN environment_tags 表
+    if tag_uuids.is_some() {
+        query.push_str(" LEFT JOIN environment_tags et ON e.uuid = et.environment_uuid ");
+    }
+
+    query.push_str(
+        r#"
+        WHERE e.workspace_uuid = $1
+          AND e.team_uuid = $2
+          AND e.deleted_at IS NULL
+        "#,
+    );
+
+    let mut param_index = 3;
+    let mut conditions = Vec::new();
+
+    // 分组过滤
+    if group_uuid.is_some() {
+        conditions.push(format!("e.group_uuid = ${}", param_index));
+        param_index += 1;
+    }
+
+    // 状态过滤
+    if status.is_some() {
+        conditions.push(format!("e.status = ${}", param_index));
+        param_index += 1;
+    }
+
+    // 关键词搜索
+    if keyword.is_some() {
+        conditions.push(format!(
+            "(e.name ILIKE ${} OR e.uuid::text ILIKE ${})",
+            param_index, param_index
+        ));
+        param_index += 1;
+    }
+
+    // 标签过滤
+    if let Some(tags) = tag_uuids {
+        if !tags.is_empty() {
+            conditions.push(format!("et.tag_uuid = ANY(${})", param_index));
+        }
+    }
+
+    // 添加所有条件
+    for condition in conditions {
+        query.push_str(&format!(" AND {}", condition));
+    }
+
+    // 构建查询
+    let mut sql_query = sqlx::query_scalar::<_, i64>(&query)
+        .bind(workspace_uuid)
+        .bind(team_uuid);
+
+    // 绑定参数
+    if let Some(g) = group_uuid {
+        sql_query = sql_query.bind(g);
+    }
+    if let Some(s) = status {
+        sql_query = sql_query.bind(s);
+    }
+    if let Some(k) = keyword {
+        let search_pattern = format!("%{}%", k);
+        sql_query = sql_query.bind(search_pattern);
+    }
+    if let Some(tags) = tag_uuids {
+        if !tags.is_empty() {
+            sql_query = sql_query.bind(tags);
+        }
+    }
+
+    let count = sql_query.fetch_one(pool).await?;
 
     Ok(count)
 }

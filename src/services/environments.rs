@@ -245,22 +245,36 @@ pub async fn get_environments_service(
 
     let group_uuid = payload.filters.as_ref().and_then(|f| f.group_uuid);
     let status = payload.filters.as_ref().and_then(|f| f.status.as_deref());
+    let keyword = payload.filters.as_ref().and_then(|f| f.keyword.as_deref());
+    let tag_uuids = payload.filters.as_ref().and_then(|f| f.tag_uuids.as_deref());
 
-    // 2. 查询环境基础列表
+    // 2. 查询环境总数（用于分页）
+    let total_count = models::fetch_environments_count(
+        &svc_ctx.db,
+        workspace_uuid,
+        team_uuid,
+        group_uuid,
+        status,
+        keyword,
+        tag_uuids,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // 3. 查询环境基础列表
     let env_rows = models::fetch_environments_base(
         &svc_ctx.db,
         workspace_uuid,
         team_uuid,
         group_uuid,
         status,
+        keyword,
+        tag_uuids,
         offset,
         payload.pagination.page_size,
     )
     .await
     .map_err(|e| e.to_string())?;
-
-    // 注意：这里不查询总数，因为权限过滤后的实际数量需要根据过滤结果计算
-    // 如果需要精确的分页总数，需要在权限过滤后重新计算
 
     // 2. 权限过滤：根据分组权限过滤环境
     let is_owner_or_admin = matches!(team_member.role.as_str(), "owner" | "admin");
@@ -446,10 +460,10 @@ pub async fn get_environments_service(
         })
         .collect();
 
-    // 返回过滤后的环境列表和实际数量（用于分页显示）
-    // 注意：total 是查询时的总数，实际返回的数量是过滤后的
-    let filtered_total = environments.len() as i64;
-    Ok((environments, filtered_total))
+    // 返回过滤后的环境列表和数据库总数（用于分页显示）
+    // 注意：total 是数据库中符合条件的总数，不考虑权限过滤
+    // 权限过滤只影响当前页返回的数据，不影响总数统计
+    Ok((environments, total_count))
 }
 
 /// 获取环境详情
