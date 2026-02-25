@@ -4,7 +4,8 @@ use uuid::Uuid;
 /// 获取工作空间配额请求
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GetWorkspaceQuotaRequest {
-    pub workspace_uuid: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_uuid: Option<Uuid>,
 }
 
 /// 更新配额使用情况请求

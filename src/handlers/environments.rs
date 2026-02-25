@@ -362,6 +362,80 @@ pub async fn get_environment_handler(
     ))
 }
 
+/// 批量获取环境详情
+pub async fn batch_get_environments_handler(
+    State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
+    Json(payload): Json<BatchUuidRequest>,
+) -> Result<std::collections::HashMap<String, EnvironmentDetailResponse>> {
+    let workspace_uuid = ctx
+        .current_workspace_uuid
+        .ok_or_else(|| Response::fail(Some("请先选择工作空间")))?;
+    let team_uuid = ctx.current_team_uuid.ok_or_else(|| Response::fail(Some("请先选择团队")))?;
+
+    let mut results = std::collections::HashMap::new();
+
+    for uuid in payload.uuids {
+        // 对每个 UUID 尝试获取环境详情，失败则跳过
+        let detail = async {
+            let environment = services::environments::get_environment_service(
+                &svc_ctx,
+                workspace_uuid,
+                team_uuid,
+                ctx.user_uuid_unwrap(),
+                uuid,
+            )
+            .await
+            .ok()?;
+
+            let config = services::environments::get_environment_config_service(&svc_ctx, uuid)
+                .await
+                .ok();
+
+            let tags = services::environments::get_environment_tags_service(&svc_ctx, uuid)
+                .await
+                .ok()?;
+
+            let accounts = services::accounts::get_environment_accounts_service(&svc_ctx, uuid)
+                .await
+                .unwrap_or_default();
+
+            let group = if let Some(group_uuid) = environment.group_uuid {
+                services::environments::get_group_summary_service(&svc_ctx, group_uuid)
+                    .await
+                    .ok()
+            } else {
+                None
+            };
+
+            let proxy = if let Some(proxy_uuid) = environment.proxy_uuid {
+                services::environments::get_proxy_summary_service(&svc_ctx, proxy_uuid)
+                    .await
+                    .ok()
+            } else {
+                None
+            };
+
+            Some(EnvironmentDetailResponse {
+                environment,
+                config,
+                tags,
+                accounts,
+                group,
+                proxy,
+            })
+        }
+        .await;
+
+        // 只有成功获取的环境才加入结果
+        if let Some(detail) = detail {
+            results.insert(uuid.to_string(), detail);
+        }
+    }
+
+    Ok(Response::success(Some("获取成功"), Some(results)))
+}
+
 /// 创建环境
 pub async fn create_environment_handler(
     State(svc_ctx): State<SvcCtx>,

@@ -3,11 +3,12 @@ use axum::routing::post;
 use crate::handlers::{
     add_environment_cookie_handler, add_environment_url_handler, assign_tags_handler,
     batch_assign_tags_handler, batch_create_environments_handler,
-    batch_delete_environments_handler, batch_move_to_group_handler,
-    batch_permanent_delete_environments_handler, batch_remove_tags_handler,
-    batch_restore_environments_handler, clear_environment_cookies_handler,
-    clear_environment_urls_handler, create_environment_handler, create_group_handler,
-    create_tag_handler, delete_environment_cookie_handler, delete_environment_handler,
+    batch_delete_environments_handler, batch_get_environments_handler,
+    batch_move_to_group_handler, batch_permanent_delete_environments_handler,
+    batch_remove_tags_handler, batch_restore_environments_handler,
+    clear_environment_cookies_handler, clear_environment_urls_handler,
+    create_environment_handler, create_group_handler, create_tag_handler,
+    delete_environment_cookie_handler, delete_environment_handler,
     delete_environment_url_handler, delete_group_handler, delete_tag_handler,
     get_environment_cookies_handler, get_environment_handler, get_environment_urls_handler,
     get_environments_handler, get_groups_handler, get_recycle_bin_environments_handler,
@@ -53,6 +54,10 @@ pub fn register_routes(meta_route: &mut MetaRoute) {
     env_route.add_route_item(route::RouteItem::post(
         "/detail",
         post(get_environment_handler),
+    ));
+    env_route.add_route_item(route::RouteItem::post(
+        "/batch-detail",
+        post(batch_get_environments_handler),
     ));
     env_route.add_route_item(route::RouteItem::post(
         "/create",

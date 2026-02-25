@@ -233,7 +233,9 @@ pub async fn get_quota_handler(
 
     let quota = services::workspace_quotas::get_workspace_quota_service(
         &svc_ctx,
-        &crate::entitys::GetWorkspaceQuotaRequest { workspace_uuid },
+        &crate::entitys::GetWorkspaceQuotaRequest {
+            workspace_uuid: Some(workspace_uuid),
+        },
     )
     .await
     .map_err(|e| Response::fail(Some(&e)))?;
