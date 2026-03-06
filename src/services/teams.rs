@@ -161,14 +161,16 @@ pub async fn invite_member_service(
             .await
             .map_err(|e| e.to_string())?;
 
-    if let Some(ref user_info) = invited_user_info {
-        if models::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_info.user_uuid)
-            .await
-            .map_err(|e| e.to_string())?
-            .is_some()
-        {
-            return Err("该用户已是团队成员".to_string());
-        }
+    // 检查用户是否存在
+    let user_info = invited_user_info.ok_or_else(|| "该邮箱未注册，请先注册账号".to_string())?;
+
+    // 检查用户是否已是团队成员
+    if models::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_info.user_uuid)
+        .await
+        .map_err(|e| e.to_string())?
+        .is_some()
+    {
+        return Err("该用户已是团队成员".to_string());
     }
 
     // 获取团队信息
@@ -224,35 +226,33 @@ pub async fn invite_member_service(
     );
 
     // 2. 如果用户已注册，发送团队邀请消息通知
-    if let Some(ref user_info) = invited_user_info {
-        let _ = crate::services::messages::create_message_service(
-            svc_ctx,
-            Some(inviter_uuid),
-            &crate::entitys::CreateMessageRequest {
-                message_type: "team_invitation".to_string(),
-                title: format!("{} 邀请您加入团队 {}", inviter_name, team.name),
-                content: Some(format!(
-                    "{}（{}）邀请您加入团队 {}，角色：{}",
-                    inviter_name, inviter_email, team.name, payload.role
-                )),
-                recipient_uuids: vec![user_info.user_uuid],
-                recipient_type: "single".to_string(),
-                related_type: Some("team".to_string()),
-                related_uuid: Some(team_uuid),
-                priority: Some("normal".to_string()),
-                metadata: Some(serde_json::json!({
-                    "invitation_uuid": invitation_uuid.to_string(),
-                    "team_name": team.name,
-                    "role": payload.role,
-                    "inviter_name": inviter_name,
-                    "inviter_email": inviter_email,
-                    "token": token,
-                })),
-            },
-        )
-        .await;
-        // 消息创建失败不影响邀请流程，使用 _ 忽略错误
-    }
+    let _ = crate::services::messages::create_message_service(
+        svc_ctx,
+        Some(inviter_uuid),
+        &crate::entitys::CreateMessageRequest {
+            message_type: "team_invitation".to_string(),
+            title: format!("{} 邀请您加入团队 {}", inviter_name, team.name),
+            content: Some(format!(
+                "{}（{}）邀请您加入团队 {}，角色：{}",
+                inviter_name, inviter_email, team.name, payload.role
+            )),
+            recipient_uuids: vec![user_info.user_uuid],
+            recipient_type: "single".to_string(),
+            related_type: Some("team".to_string()),
+            related_uuid: Some(team_uuid),
+            priority: Some("normal".to_string()),
+            metadata: Some(serde_json::json!({
+                "invitation_uuid": invitation_uuid.to_string(),
+                "team_name": team.name,
+                "role": payload.role,
+                "inviter_name": inviter_name,
+                "inviter_email": inviter_email,
+                "token": token,
+            })),
+        },
+    )
+    .await;
+    // 消息创建失败不影响邀请流程，使用 _ 忽略错误
 
     Ok(invitation_uuid)
 }
@@ -279,18 +279,16 @@ pub async fn accept_invitation_service(
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "邀请不存在或已过期".to_string())?;
 
-    // 获取团队信息（用于获取 workspace_uuid）
-    let team = models::fetch_team_by_uuid(&svc_ctx.db, invitation.team_uuid)
+    // 获取被邀请用户的当前工作空间
+    let user_workspace_uuid = crate::models::user::fetch_user_current_workspace(&svc_ctx.db, user_uuid)
         .await
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| "团队不存在".to_string())?;
-
-    let workspace_uuid = team.workspace_uuid;
+        .ok_or_else(|| "请先选择工作空间".to_string())?;
 
     // 检查用户是否已经是该工作空间的团队成员（如果是，则不需要检查配额）
     let existing_member = models::fetch_team_member(
         &svc_ctx.db,
-        workspace_uuid,
+        user_workspace_uuid,
         invitation.team_uuid,
         user_uuid,
     )
@@ -300,7 +298,7 @@ pub async fn accept_invitation_service(
     // 如果用户还不是该工作空间的任何团队的成员，需要检查配额
     if existing_member.is_none() {
         // 检查工作空间成员配额是否充足
-        let quota_available = models::check_quota(&svc_ctx.db, workspace_uuid, "team_members")
+        let quota_available = models::check_quota(&svc_ctx.db, user_workspace_uuid, "team_members")
             .await
             .map_err(|e| e.to_string())?;
         if !quota_available {
@@ -309,14 +307,14 @@ pub async fn accept_invitation_service(
     }
 
     // 使用 accept_team_invitation 函数处理整个流程
-    let team_uuid = models::accept_team_invitation(&svc_ctx.db, invitation.uuid, user_uuid)
+    let team_uuid = models::accept_team_invitation(&svc_ctx.db, invitation.uuid, user_uuid, user_workspace_uuid)
         .await
         .map_err(|e| e.to_string())?;
 
     // 更新成员配额（重新计算所有团队的活跃成员总数）
     // 注意：只有在用户之前不是该工作空间的成员时才需要更新配额
     if existing_member.is_none() {
-        models::update_used_team_members(&svc_ctx.db, workspace_uuid)
+        models::update_used_team_members(&svc_ctx.db, user_workspace_uuid)
             .await
             .map_err(|e| format!("更新配额失败: {}", e))?;
     }

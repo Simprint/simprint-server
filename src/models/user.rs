@@ -401,6 +401,23 @@ pub async fn update_password(
 }
 
 /// 设置用户当前工作空间
+pub async fn fetch_user_current_workspace(
+    pool: &Pool<Postgres>,
+    user_uuid: Uuid,
+) -> Result<Option<Uuid>, Error> {
+    let rec: Option<Uuid> = sqlx::query_scalar(
+        r#"
+        SELECT current_workspace_uuid FROM user_infos
+        WHERE user_uuid = $1
+        "#,
+    )
+    .bind(user_uuid)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(rec)
+}
+
 pub async fn set_user_current_workspace(
     pool: &Pool<Postgres>,
     user_uuid: Uuid,

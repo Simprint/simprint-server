@@ -661,6 +661,7 @@ pub async fn accept_team_invitation(
     pool: &Pool<Postgres>,
     invitation_uuid: Uuid,
     user_uuid: Uuid,
+    workspace_uuid: Uuid,
 ) -> Result<Uuid, Error> {
     let mut tx = pool.begin().await?;
 
@@ -692,9 +693,9 @@ pub async fn accept_team_invitation(
     // 4. 添加成员（如果已存在则更新状态为 active）
     sqlx::query(
         r#"
-        INSERT INTO team_members (team_uuid, user_uuid, role, invited_by, status)
-        VALUES ($1, $2, $3, $4, 'active')
-        ON CONFLICT (team_uuid, user_uuid) DO UPDATE SET
+        INSERT INTO team_members (team_uuid, workspace_uuid, user_uuid, role, invited_by, status)
+        VALUES ($1, $2, $3, $4, $5, 'active')
+        ON CONFLICT (team_uuid, user_uuid, workspace_uuid) DO UPDATE SET
             role = EXCLUDED.role,
             invited_by = EXCLUDED.invited_by,
             status = 'active',
@@ -703,6 +704,7 @@ pub async fn accept_team_invitation(
         "#,
     )
     .bind(invitation.team_uuid)
+    .bind(workspace_uuid)
     .bind(user_uuid)
     .bind(&invitation.role)
     .bind(invitation.invited_by)
