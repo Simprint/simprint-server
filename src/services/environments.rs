@@ -26,7 +26,7 @@ pub async fn create_environment_service(
     payload: &CreateEnvironmentRequest,
 ) -> Result<Uuid, String> {
     // 1. 检查用户是否在当前工作空间的团队中（工作空间级别）
-    let team_member = models::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
+    let team_member = models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
         .await
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "您不是该团队的成员".to_string())?;
@@ -236,7 +236,7 @@ pub async fn get_environments_service(
     payload: &ListEnvironmentsRequest,
 ) -> Result<(Vec<crate::entitys::EnvironmentDetailResponse>, i64), String> {
     // 1. 检查用户是否在当前工作空间的团队中
-    let team_member = models::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
+    let team_member = models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
         .await
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "您不是该团队的成员".to_string())?;
@@ -396,6 +396,20 @@ pub async fn get_environments_service(
         accounts_map.insert(*env_uuid, accounts);
     }
 
+    // 批量查询扩展（为每个环境动态合并插件）
+    let mut extensions_map: HashMap<Uuid, Vec<crate::dto::environments::ExtensionSummaryDto>> = HashMap::new();
+    for row in &filtered_env_rows {
+        let extensions = crate::services::extensions::get_environment_extensions_service(
+            &svc_ctx,
+            user_uuid,
+            team_uuid,
+            row.group_uuid,
+        )
+        .await
+        .unwrap_or_default();
+        extensions_map.insert(row.uuid, extensions);
+    }
+
     // 11. 组装完整数据（使用与环境详情一致的数据结构）
     let environments: Vec<crate::entitys::EnvironmentDetailResponse> = filtered_env_rows
         .into_iter()
@@ -456,6 +470,7 @@ pub async fn get_environments_service(
                 accounts: accounts_map.remove(&row.uuid).unwrap_or_default(),
                 group,
                 proxy,
+                extensions: extensions_map.remove(&row.uuid).unwrap_or_default(),
             }
         })
         .collect();
@@ -475,7 +490,7 @@ pub async fn get_environment_service(
     env_uuid: Uuid,
 ) -> Result<EnvironmentDto, String> {
     // 1. 检查用户是否在当前工作空间的团队中
-    let _team_member = models::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
+    let _team_member = models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
         .await
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "您不是该团队的成员".to_string())?;
@@ -568,6 +583,16 @@ pub async fn get_environment_detail_service(
         None
     };
 
+    // 获取扩展列表
+    let extensions = crate::services::extensions::get_environment_extensions_service(
+        svc_ctx,
+        user_uuid,
+        team_uuid,
+        environment.group_uuid,
+    )
+    .await
+    .unwrap_or_default();
+
     Ok(crate::entitys::EnvironmentDetailResponse {
         environment,
         config,
@@ -575,6 +600,7 @@ pub async fn get_environment_detail_service(
         accounts,
         group,
         proxy,
+        extensions,
     })
 }
 
@@ -631,7 +657,7 @@ pub async fn update_environment_service(
     payload: &UpdateEnvironmentRequest,
 ) -> Result<(), String> {
     // 1. 检查用户是否在当前工作空间的团队中
-    let team_member = models::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
+    let team_member = models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
         .await
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "您不是该团队的成员".to_string())?;
@@ -812,7 +838,7 @@ pub async fn delete_environment_service(
     env_uuid: Uuid,
 ) -> Result<(), String> {
     // 1. 检查用户是否在当前工作空间的团队中
-    let team_member = models::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
+    let team_member = models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
         .await
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "您不是该团队的成员".to_string())?;
@@ -1042,6 +1068,7 @@ pub async fn get_recycle_bin_environments_service(
                 accounts,
                 group,
                 proxy,
+                extensions: vec![], // 回收站不需要返回扩展数据
             }
         })
         .collect();

@@ -76,25 +76,27 @@ pub struct ExtensionFilters {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct InstallExtensionRequest {
     pub extension_id: String,
-    /// 安装目标: user, team, group, environment
+    /// 安装目标: user, team, group
     pub target_type: Option<String>,
     /// 分组 UUID 数组（用于安装到分组，即使只有一个分组也需要传入数组）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub group_ids: Option<Vec<Uuid>>,
-    /// 环境 UUID（用于安装到环境）
+    /// 是否为团队共享（仅 target_type=group 时有效）
+    /// true: 团队所有成员可用，false: 仅创建者可用
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub env_uuid: Option<Uuid>,
+    pub is_team_shared: Option<bool>,
 }
 
 /// 卸载扩展请求
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UninstallExtensionRequest {
     pub extension_id: String,
-    /// 卸载类型：user、team、environment
+    /// 卸载类型：user、team、group
     /// 如果不指定，默认为 user
-    /// 注意：无论 target_type 是什么，后端都会自动删除所有相关的分组记录
     pub target_type: Option<String>,
-    /// 目标 UUID（用于 team 和 environment 类型）
+    /// 目标 UUID（用于 team 和 group 类型）
+    /// - target_type=team: 表示 team_uuid
+    /// - target_type=group: 表示 group_uuid
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_uuid: Option<Uuid>,
 }
@@ -114,6 +116,12 @@ pub struct BatchUpdateExtensionsRequest {
 /// 扩展 ID 请求
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ExtensionIdRequest {
+    pub extension_id: String,
+}
+
+/// 禁用/启用扩展请求
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ToggleExtensionRequest {
     pub extension_id: String,
 }
 

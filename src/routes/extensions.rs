@@ -1,9 +1,10 @@
 use axum::routing::post;
 
 use crate::handlers::{
-    batch_update_extensions_handler, get_extension_categories_handler,
-    get_extension_detail_handler, get_extensions_handler, get_installed_extensions_handler,
-    install_extension_handler, uninstall_extension_handler, update_extension_handler,
+    batch_update_extensions_handler, disable_extension_handler, enable_extension_handler,
+    get_extension_categories_handler, get_extension_detail_handler, get_extensions_handler,
+    get_installed_extensions_handler, install_extension_handler, uninstall_extension_handler,
+    update_extension_handler,
 };
 use crate::routes::route::{self, MetaRoute};
 
@@ -47,6 +48,16 @@ pub fn register_routes(meta_route: &mut MetaRoute) {
     ext_route.add_route_item(route::RouteItem::post(
         "/batch-update",
         post(batch_update_extensions_handler),
+    ));
+
+    // 禁用/启用扩展
+    ext_route.add_route_item(route::RouteItem::post(
+        "/disable",
+        post(disable_extension_handler),
+    ));
+    ext_route.add_route_item(route::RouteItem::post(
+        "/enable",
+        post(enable_extension_handler),
     ));
 
     meta_route.add_route_group(ext_route);

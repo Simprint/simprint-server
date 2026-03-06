@@ -208,6 +208,19 @@ pub struct EnvironmentListItemDto {
     pub tags: Vec<TagDto>,
     // 账号列表（完整对象列表）
     pub accounts: Vec<AccountSummaryDto>,
+    // 扩展列表（插件列表）
+    pub extensions: Vec<ExtensionSummaryDto>,
+}
+
+/// 扩展摘要 DTO（用于环境列表）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExtensionSummaryDto {
+    pub extension_id: String,
+    pub name: String,
+    pub version: String,
+    pub icon_url: Option<String>,
+    pub download_url: Option<String>,
+    pub scope: String, // user, team, group-personal, group-team
 }
 
 /// 环境配置 DTO

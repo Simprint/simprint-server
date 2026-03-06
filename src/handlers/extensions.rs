@@ -4,7 +4,7 @@ use crate::dto::ExtensionDto;
 use crate::entitys::{
     BatchUpdateExtensionsRequest, BatchUpdateResponse, ExtensionIdRequest, ExtensionsListResponse,
     GetInstalledExtensionsRequest, InstallExtensionRequest, InstalledExtensionsResponse,
-    ListExtensionsRequest, UninstallExtensionRequest, UpdateExtensionRequest,
+    ListExtensionsRequest, ToggleExtensionRequest, UninstallExtensionRequest, UpdateExtensionRequest,
 };
 use crate::services;
 use crate::state::RequestContext;
@@ -78,7 +78,7 @@ pub async fn get_installed_extensions_handler(
         "team" => {
             let team_uuid = team_uuid.ok_or_else(|| Response::fail(Some("未指定团队")))?;
             let team_extensions =
-                services::extensions::get_team_installed_extensions_service(&svc_ctx, team_uuid)
+                services::extensions::get_team_installed_extensions_service(&svc_ctx, team_uuid, ctx.user_uuid_unwrap())
                     .await
                     .map_err(|e| Response::fail(Some(&e)))?;
             (Vec::new(), team_extensions)
@@ -93,7 +93,7 @@ pub async fn get_installed_extensions_handler(
             .await
             .map_err(|e| Response::fail(Some(&e)))?;
             let team_extensions = if let Some(team_uuid) = team_uuid {
-                services::extensions::get_team_installed_extensions_service(&svc_ctx, team_uuid)
+                services::extensions::get_team_installed_extensions_service(&svc_ctx, team_uuid, ctx.user_uuid_unwrap())
                     .await
                     .map_err(|e| Response::fail(Some(&e)))?
             } else {
@@ -118,6 +118,7 @@ pub async fn install_extension_handler(
     Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<InstallExtensionRequest>,
 ) -> Result<()> {
+    let workspace_uuid = ctx.current_workspace_uuid.ok_or_else(|| Response::fail(Some("请先选择工作空间")))?;
     let team_uuid = services::teams::get_current_team_service(&svc_ctx, ctx.user_uuid_unwrap())
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
@@ -140,6 +141,7 @@ pub async fn uninstall_extension_handler(
     Extension(ctx): Extension<RequestContext>,
     Json(payload): Json<UninstallExtensionRequest>,
 ) -> Result<()> {
+    let workspace_uuid = ctx.current_workspace_uuid.ok_or_else(|| Response::fail(Some("请先选择工作空间")))?;
     let team_uuid = services::teams::get_current_team_service(&svc_ctx, ctx.user_uuid_unwrap())
         .await
         .map_err(|e| Response::fail(Some(&e)))?;
@@ -191,4 +193,50 @@ pub async fn batch_update_extensions_handler(
         Some("批量更新完成"),
         Some(BatchUpdateResponse { updated }),
     ))
+}
+
+/// 禁用扩展（用户级别）
+pub async fn disable_extension_handler(
+    State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
+    Json(payload): Json<ToggleExtensionRequest>,
+) -> Result<()> {
+    let team_uuid = services::teams::get_current_team_service(&svc_ctx, ctx.user_uuid_unwrap())
+        .await
+        .map_err(|e| Response::fail(Some(&e)))?
+        .ok_or_else(|| Response::fail(Some("未指定团队")))?;
+
+    services::extensions::disable_extension_service(
+        &svc_ctx,
+        ctx.user_uuid_unwrap(),
+        team_uuid,
+        &payload.extension_id,
+    )
+    .await
+    .map_err(|e| Response::fail(Some(&e)))?;
+
+    Ok(Response::success(Some("禁用成功"), None))
+}
+
+/// 启用扩展（用户级别）
+pub async fn enable_extension_handler(
+    State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
+    Json(payload): Json<ToggleExtensionRequest>,
+) -> Result<()> {
+    let team_uuid = services::teams::get_current_team_service(&svc_ctx, ctx.user_uuid_unwrap())
+        .await
+        .map_err(|e| Response::fail(Some(&e)))?
+        .ok_or_else(|| Response::fail(Some("未指定团队")))?;
+
+    services::extensions::enable_extension_service(
+        &svc_ctx,
+        ctx.user_uuid_unwrap(),
+        team_uuid,
+        &payload.extension_id,
+    )
+    .await
+    .map_err(|e| Response::fail(Some(&e)))?;
+
+    Ok(Response::success(Some("启用成功"), None))
 }

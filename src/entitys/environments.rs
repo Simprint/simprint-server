@@ -234,4 +234,5 @@ pub struct EnvironmentDetailResponse {
     pub accounts: Vec<crate::dto::PlatformAccountDto>,
     pub group: Option<crate::dto::GroupSummaryDto>, // 分组完整信息
     pub proxy: Option<crate::dto::ProxySummaryDto>, // 代理完整信息
+    pub extensions: Vec<crate::dto::environments::ExtensionSummaryDto>, // 扩展列表
 }

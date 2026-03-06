@@ -358,6 +358,7 @@ pub async fn get_environment_handler(
             accounts,
             group,
             proxy,
+            extensions: vec![], // handlers 中不需要返回扩展，由 service 层处理
         }),
     ))
 }
@@ -423,6 +424,7 @@ pub async fn batch_get_environments_handler(
                 accounts,
                 group,
                 proxy,
+                extensions: vec![], // handlers 中不需要返回扩展，由 service 层处理
             })
         }
         .await;

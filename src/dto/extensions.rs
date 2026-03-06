@@ -109,18 +109,19 @@ pub struct GroupExtensionDto {
     pub installed_version: String,
     pub installed_by: Uuid,
     pub status: String,
+    pub is_team_shared: bool,
     pub installed_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
-/// 环境扩展 DTO
+/// 用户团队插件偏好设置 DTO
 #[derive(Debug, Clone, FromRow, Serialize)]
-pub struct EnvironmentExtensionDto {
+pub struct UserTeamExtensionPreferenceDto {
     pub id: i32,
-    pub environment_uuid: Uuid,
+    pub user_uuid: Uuid,
+    pub team_uuid: Uuid,
     pub extension_id: String,
-    pub installed_version: String,
-    pub status: String,
-    pub installed_at: DateTime<Utc>,
+    pub is_disabled: bool,
+    pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

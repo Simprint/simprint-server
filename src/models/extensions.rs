@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::entitys::extensions::{CreateExtensionParams, UpdateExtensionParams};
 use crate::dto::{
-    EnvironmentExtensionDto, ExtensionDto, GroupExtensionDto, TeamExtensionDto, UserExtensionDto,
+    ExtensionDto, GroupExtensionDto, TeamExtensionDto, UserExtensionDto,
 };
 
 // ============ Extensions CRUD ============
@@ -345,7 +345,7 @@ pub async fn fetch_group_extensions(
 ) -> Result<Vec<GroupExtensionDto>, Error> {
     let recs = sqlx::query_as::<_, GroupExtensionDto>(
         r#"
-        SELECT id, group_uuid, extension_id, installed_version, installed_by, status, installed_at, updated_at
+        SELECT id, group_uuid, extension_id, installed_version, installed_by, status, is_team_shared, installed_at, updated_at
         FROM group_extensions
         WHERE group_uuid = $1 AND status = 'active'
         ORDER BY installed_at DESC
@@ -365,14 +365,16 @@ pub async fn insert_group_extension(
     extension_id: &str,
     version: &str,
     installed_by: Uuid,
+    is_team_shared: bool,
 ) -> Result<i32, Error> {
     let id: i32 = sqlx::query_scalar(
         r#"
-        INSERT INTO group_extensions (group_uuid, extension_id, installed_version, installed_by, status)
-        VALUES ($1, $2, $3, $4, 'active')
+        INSERT INTO group_extensions (group_uuid, extension_id, installed_version, installed_by, is_team_shared, status)
+        VALUES ($1, $2, $3, $4, $5, 'active')
         ON CONFLICT (group_uuid, extension_id) DO UPDATE SET
             installed_version = $3,
             installed_by = $4,
+            is_team_shared = $5,
             status = 'active',
             updated_at = CURRENT_TIMESTAMP
         RETURNING id;
@@ -382,6 +384,7 @@ pub async fn insert_group_extension(
     .bind(extension_id)
     .bind(version)
     .bind(installed_by)
+    .bind(is_team_shared)
     .fetch_one(pool)
     .await?;
 
@@ -445,6 +448,25 @@ pub async fn fetch_group_uuids_by_extension_id(
     Ok(recs)
 }
 
+/// 根据扩展 ID 查询团队共享的分组 UUID
+pub async fn fetch_team_shared_group_uuids_by_extension_id(
+    pool: &Pool<Postgres>,
+    extension_id: &str,
+) -> Result<Vec<Uuid>, Error> {
+    let recs = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT DISTINCT group_uuid
+        FROM group_extensions
+        WHERE extension_id = $1 AND status = 'active' AND is_team_shared = true
+        "#,
+    )
+    .bind(extension_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(recs)
+}
+
 /// 查询用户相关的分组中安装的扩展
 /// 包括用户个人分组（无 team_uuid，由用户创建）和用户所在团队的分组
 pub async fn fetch_user_group_extensions(
@@ -454,7 +476,7 @@ pub async fn fetch_user_group_extensions(
 ) -> Result<Vec<GroupExtensionDto>, Error> {
     let recs = sqlx::query_as::<_, GroupExtensionDto>(
         r#"
-        SELECT ge.id, ge.group_uuid, ge.extension_id, ge.installed_version, ge.installed_by, ge.status, ge.installed_at, ge.updated_at
+        SELECT ge.id, ge.group_uuid, ge.extension_id, ge.installed_version, ge.installed_by, ge.status, ge.is_team_shared, ge.installed_at, ge.updated_at
         FROM group_extensions ge
         INNER JOIN groups g ON ge.group_uuid = g.uuid
         WHERE ge.status = 'active'
@@ -478,10 +500,11 @@ pub async fn fetch_team_group_extensions(
 ) -> Result<Vec<GroupExtensionDto>, Error> {
     let recs = sqlx::query_as::<_, GroupExtensionDto>(
         r#"
-        SELECT ge.id, ge.group_uuid, ge.extension_id, ge.installed_version, ge.installed_by, ge.status, ge.installed_at, ge.updated_at
+        SELECT ge.id, ge.group_uuid, ge.extension_id, ge.installed_version, ge.installed_by, ge.status, ge.is_team_shared, ge.installed_at, ge.updated_at
         FROM group_extensions ge
         INNER JOIN groups g ON ge.group_uuid = g.uuid
         WHERE ge.status = 'active'
+          AND ge.is_team_shared = true
           AND g.deleted_at IS NULL
           AND g.team_uuid = $1
         ORDER BY ge.installed_at DESC
@@ -494,68 +517,71 @@ pub async fn fetch_team_group_extensions(
     Ok(recs)
 }
 
-// ============ Environment Extensions ============
+// ============ User Team Extension Preferences ============
 
-/// 查询环境已安装的扩展
-pub async fn fetch_environment_extensions(
+/// 查询用户禁用的团队插件列表
+pub async fn fetch_user_disabled_team_extensions(
     pool: &Pool<Postgres>,
-    environment_uuid: Uuid,
-) -> Result<Vec<EnvironmentExtensionDto>, Error> {
-    let recs = sqlx::query_as::<_, EnvironmentExtensionDto>(
+    user_uuid: Uuid,
+    team_uuid: Uuid,
+) -> Result<Vec<String>, Error> {
+    let recs = sqlx::query_scalar::<_, String>(
         r#"
-        SELECT id, environment_uuid, extension_id, installed_version, status, installed_at, updated_at
-        FROM environment_extensions
-        WHERE environment_uuid = $1 AND status = 'active'
-        ORDER BY installed_at DESC
+        SELECT extension_id
+        FROM user_team_extension_preferences
+        WHERE user_uuid = $1 AND team_uuid = $2 AND is_disabled = true
         "#,
     )
-    .bind(environment_uuid)
+    .bind(user_uuid)
+    .bind(team_uuid)
     .fetch_all(pool)
     .await?;
 
     Ok(recs)
 }
 
-/// 安装环境扩展
-pub async fn insert_environment_extension(
+/// 设置用户对团队插件的禁用状态
+pub async fn set_user_team_extension_preference(
     pool: &Pool<Postgres>,
-    environment_uuid: Uuid,
+    user_uuid: Uuid,
+    team_uuid: Uuid,
     extension_id: &str,
-    version: &str,
-) -> Result<i32, Error> {
-    let id: i32 = sqlx::query_scalar(
+    is_disabled: bool,
+) -> Result<(), Error> {
+    sqlx::query(
         r#"
-        INSERT INTO environment_extensions (environment_uuid, extension_id, installed_version, status)
-        VALUES ($1, $2, $3, 'active')
-        ON CONFLICT (environment_uuid, extension_id) DO UPDATE SET
-            installed_version = $3,
-            status = 'active',
+        INSERT INTO user_team_extension_preferences (user_uuid, team_uuid, extension_id, is_disabled)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (user_uuid, team_uuid, extension_id) DO UPDATE SET
+            is_disabled = $4,
             updated_at = CURRENT_TIMESTAMP
-        RETURNING id;
         "#,
     )
-    .bind(environment_uuid)
+    .bind(user_uuid)
+    .bind(team_uuid)
     .bind(extension_id)
-    .bind(version)
-    .fetch_one(pool)
+    .bind(is_disabled)
+    .execute(pool)
     .await?;
 
-    Ok(id)
+    Ok(())
 }
 
-/// 卸载环境扩展
-pub async fn delete_environment_extension(
+/// 删除用户对团队插件的偏好设置
+pub async fn delete_user_team_extension_preference(
     pool: &Pool<Postgres>,
-    environment_uuid: Uuid,
+    user_uuid: Uuid,
+    team_uuid: Uuid,
     extension_id: &str,
 ) -> Result<(), Error> {
     sqlx::query(
         r#"
-        UPDATE environment_extensions SET status = 'inactive', updated_at = CURRENT_TIMESTAMP
-        WHERE environment_uuid = $1 AND extension_id = $2
+        DELETE FROM user_team_extension_preferences
+        WHERE user_uuid = $1 AND team_uuid = $2 AND extension_id = $3
         "#,
     )
-    .bind(environment_uuid)
+    .bind(user_uuid)
+    .bind(team_uuid)
     .bind(extension_id)
     .execute(pool)
     .await?;
