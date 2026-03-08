@@ -349,6 +349,16 @@ pub async fn get_environment_handler(
         None
     };
 
+    // 获取扩展列表
+    let extensions = crate::services::extensions::get_environment_extensions_service(
+        &svc_ctx,
+        ctx.user_uuid_unwrap(),
+        team_uuid,
+        environment.group_uuid,
+    )
+    .await
+    .unwrap_or_default();
+
     Ok(Response::success(
         Some("获取成功"),
         Some(EnvironmentDetailResponse {
@@ -358,7 +368,7 @@ pub async fn get_environment_handler(
             accounts,
             group,
             proxy,
-            extensions: vec![], // handlers 中不需要返回扩展，由 service 层处理
+            extensions,
         }),
     ))
 }
@@ -417,6 +427,16 @@ pub async fn batch_get_environments_handler(
                 None
             };
 
+            // 获取扩展列表
+            let extensions = crate::services::extensions::get_environment_extensions_service(
+                &svc_ctx,
+                ctx.user_uuid_unwrap(),
+                team_uuid,
+                environment.group_uuid,
+            )
+            .await
+            .unwrap_or_default();
+
             Some(EnvironmentDetailResponse {
                 environment,
                 config,
@@ -424,7 +444,7 @@ pub async fn batch_get_environments_handler(
                 accounts,
                 group,
                 proxy,
-                extensions: vec![], // handlers 中不需要返回扩展，由 service 层处理
+                extensions,
             })
         }
         .await;
