@@ -28,6 +28,7 @@ pub struct ExtensionDto {
     pub status: String,
     pub changelog: Option<serde_json::Value>,
     pub published_at: Option<DateTime<Utc>>,
+    pub hash: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

@@ -858,6 +858,7 @@ pub async fn get_environment_extensions_service(
                     version: ext.version,
                     icon_url,
                     download_url,
+                    hash: ext.hash,
                     scope: "user".to_string(),
                 },
             );
@@ -906,6 +907,7 @@ pub async fn get_environment_extensions_service(
                     version: ext.version,
                     icon_url,
                     download_url,
+                    hash: ext.hash,
                     scope: "team".to_string(),
                 },
             );
@@ -961,6 +963,7 @@ pub async fn get_environment_extensions_service(
                         version: ext.version,
                         icon_url,
                         download_url,
+                        hash: ext.hash,
                         scope,
                     },
                 );

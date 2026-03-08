@@ -220,6 +220,7 @@ pub struct ExtensionSummaryDto {
     pub version: String,
     pub icon_url: Option<String>,
     pub download_url: Option<String>,
+    pub hash: Option<String>,
     pub scope: String, // user, team, group-personal, group-team
 }
 

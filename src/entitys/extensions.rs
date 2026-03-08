@@ -24,6 +24,7 @@ pub struct CreateExtensionParams {
     pub rating: Option<Decimal>,
     pub changelog: Option<serde_json::Value>,
     pub published_at: Option<DateTime<Utc>>,
+    pub hash: Option<String>,
 }
 
 /// 更新扩展参数（模型层入参）
@@ -43,6 +44,7 @@ pub struct UpdateExtensionParams {
     pub rating: Option<Decimal>,
     pub changelog: Option<serde_json::Value>,
     pub published_at: Option<DateTime<Utc>>,
+    pub hash: Option<String>,
 }
 
 /// 查询扩展列表请求

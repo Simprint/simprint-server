@@ -18,12 +18,12 @@ pub async fn create_extension(
         INSERT INTO extensions (
             extension_id, name, description, version, category, browser,
             developer, homepage, icon_url, download_url, file_size, downloads_count,
-            permissions, rating, changelog, published_at, status
+            permissions, rating, changelog, published_at, hash, status
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'active')
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'active')
         RETURNING id, uuid, extension_id, name, description, version, category, browser,
                   developer, homepage, icon_url, download_url, file_size, downloads_count,
-                  rating, permissions, status, changelog, published_at, created_at, updated_at
+                  rating, permissions, status, changelog, published_at, hash, created_at, updated_at
         "#,
     )
     .bind(&params.extension_id)
@@ -42,6 +42,7 @@ pub async fn create_extension(
     .bind(params.rating)
     .bind(&params.changelog)
     .bind(params.published_at)
+    .bind(&params.hash)
     .fetch_one(pool)
     .await?;
 
@@ -71,6 +72,7 @@ pub async fn update_extension(
             rating = COALESCE($13, rating),
             changelog = COALESCE($14, changelog),
             published_at = COALESCE($15, published_at),
+            hash = COALESCE($16, hash),
             updated_at = CURRENT_TIMESTAMP
         WHERE extension_id = $1
         "#,
@@ -90,6 +92,7 @@ pub async fn update_extension(
     .bind(params.rating)
     .bind(params.changelog)
     .bind(params.published_at)
+    .bind(params.hash)
     .execute(pool)
     .await?;
 
@@ -118,7 +121,7 @@ pub async fn fetch_extensions(
         r#"
         SELECT id, uuid, extension_id, name, description, version, category, browser,
                developer, homepage, icon_url, download_url, file_size, downloads_count,
-               rating, permissions, status, changelog, published_at, created_at, updated_at
+               rating, permissions, status, changelog, published_at, hash, created_at, updated_at
         FROM extensions
         WHERE status = 'active'
           AND ($1::varchar IS NULL OR name ILIKE '%' || $1 || '%' OR description ILIKE '%' || $1 || '%')
@@ -168,7 +171,7 @@ pub async fn fetch_extension_by_id(
         r#"
         SELECT id, uuid, extension_id, name, description, version, category, browser,
                developer, homepage, icon_url, download_url, file_size, downloads_count,
-               rating, permissions, status, changelog, published_at, created_at, updated_at
+               rating, permissions, status, changelog, published_at, hash, created_at, updated_at
         FROM extensions
         WHERE extension_id = $1
         "#,
