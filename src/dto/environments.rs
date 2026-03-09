@@ -130,6 +130,8 @@ pub struct ProxyRowDto {
     pub host: String,
     pub port: i32,
     pub proxy_type: String,
+    pub username: Option<String>,
+    pub password_encrypted: Option<String>,
     pub country: Option<String>,
     pub city: Option<String>,
     pub status: String,
@@ -137,7 +139,7 @@ pub struct ProxyRowDto {
     pub last_check_ip: Option<String>,
 }
 
-/// 代理摘要 DTO（用于环境列表，排除敏感数据）
+/// 代理摘要 DTO（用于环境列表）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProxySummaryDto {
     pub id: i32,
@@ -146,6 +148,8 @@ pub struct ProxySummaryDto {
     pub host: String,
     pub port: i32,
     pub proxy_type: String,
+    pub username: Option<String>,
+    pub password_encrypted: Option<String>,
     pub country: Option<String>,
     pub city: Option<String>,
     pub status: String,

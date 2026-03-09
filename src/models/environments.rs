@@ -1200,7 +1200,8 @@ pub async fn fetch_proxies_by_uuids(
 
     let recs = sqlx::query_as::<_, ProxyRowDto>(
         r#"
-        SELECT id, uuid, name, host, port, proxy_type, 
+        SELECT id, uuid, name, host, port, proxy_type,
+               username, password_encrypted,
                country, city, status, latency, last_check_ip
         FROM proxies
         WHERE uuid = ANY($1) AND deleted_at IS NULL
