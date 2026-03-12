@@ -1,14 +1,13 @@
-use uuid::Uuid;
+﻿use uuid::Uuid;
 
-use crate::dto::{RpaTaskDto, RpaTaskRunDto, RpaTaskStepDto};
+use crate::dto::{RpaTaskDto, RpaTaskStepDto};
 use crate::entitys::{
-    CreateRpaTaskRequest, DuplicateRpaTaskRequest, ListRpaRunsRequest, ListRpaTasksRequest,
-    UpdateRpaTaskRequest,
+    CreateRpaTaskRequest, DuplicateRpaTaskRequest, ListRpaTasksRequest, UpdateRpaTaskRequest,
 };
 use crate::models;
 use crate::svc_ctx::SvcCtx;
 
-/// 获取 RPA 任务列表
+/// List RPA tasks.
 pub async fn get_rpa_tasks_service(
     svc_ctx: &SvcCtx,
     user_uuid: Uuid,
@@ -40,7 +39,7 @@ pub async fn get_rpa_tasks_service(
     Ok((tasks, total))
 }
 
-/// 获取 RPA 任务详情
+/// Get RPA task detail.
 pub async fn get_rpa_task_service(
     svc_ctx: &SvcCtx,
     task_uuid: Uuid,
@@ -48,7 +47,7 @@ pub async fn get_rpa_task_service(
     let task = models::rpa::fetch_rpa_task_by_uuid(&svc_ctx.db, task_uuid)
         .await
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| "RPA 任务不存在".to_string())?;
+        .ok_or_else(|| "RPA task not found".to_string())?;
 
     let steps = models::rpa::fetch_rpa_task_steps(&svc_ctx.db, task_uuid)
         .await
@@ -64,7 +63,7 @@ pub async fn get_rpa_task_service(
     Ok((task, steps, environment_uuids))
 }
 
-/// 创建 RPA 任务
+/// Create an RPA task.
 pub async fn create_rpa_task_service(
     svc_ctx: &SvcCtx,
     user_uuid: Uuid,
@@ -95,7 +94,7 @@ pub async fn create_rpa_task_service(
     .await
     .map_err(|e| e.to_string())?;
 
-    // 添加步骤
+    // Persist ordered steps.
     if let Some(steps) = &payload.steps {
         for (i, step) in steps.iter().enumerate() {
             models::rpa::insert_rpa_task_step(
@@ -108,13 +107,15 @@ pub async fn create_rpa_task_service(
                 step.position_x,
                 step.position_y,
                 Some(step.sort_order.unwrap_or(i as i32)),
+                step.next_step_uuid,
+                step.branch_config.as_ref(),
             )
             .await
             .map_err(|e| e.to_string())?;
         }
     }
 
-    // 添加环境关联
+    // Persist environment bindings.
     if let Some(env_uuids) = &payload.environment_uuids {
         for (i, env_uuid) in env_uuids.iter().enumerate() {
             models::rpa::insert_rpa_task_environment(
@@ -131,7 +132,7 @@ pub async fn create_rpa_task_service(
     Ok(task_uuid)
 }
 
-/// 更新 RPA 任务
+/// Update an RPA task.
 pub async fn update_rpa_task_service(
     svc_ctx: &SvcCtx,
     payload: &UpdateRpaTaskRequest,
@@ -159,14 +160,14 @@ pub async fn update_rpa_task_service(
     .await
     .map_err(|e| e.to_string())?;
 
-    // 更新步骤（如果提供）
+    // Replace stored steps when the caller sends a full step list.
     if let Some(steps) = &payload.steps {
-        // 先删除旧步骤
+        // Remove previous step rows first.
         models::rpa::delete_rpa_task_steps(&svc_ctx.db, payload.uuid)
             .await
             .map_err(|e| e.to_string())?;
 
-        // 添加新步骤
+        // Insert the new step rows.
         for (i, step) in steps.iter().enumerate() {
             models::rpa::insert_rpa_task_step(
                 &svc_ctx.db,
@@ -178,20 +179,22 @@ pub async fn update_rpa_task_service(
                 step.position_x,
                 step.position_y,
                 Some(step.sort_order.unwrap_or(i as i32)),
+                step.next_step_uuid,
+                step.branch_config.as_ref(),
             )
             .await
             .map_err(|e| e.to_string())?;
         }
     }
 
-    // 更新环境关联（如果提供）
+    // Replace environment bindings when provided.
     if let Some(env_uuids) = &payload.environment_uuids {
-        // 先删除旧关联
+        // Remove previous environment bindings.
         models::rpa::delete_rpa_task_environments(&svc_ctx.db, payload.uuid)
             .await
             .map_err(|e| e.to_string())?;
 
-        // 添加新关联
+        // Insert the new environment bindings.
         for (i, env_uuid) in env_uuids.iter().enumerate() {
             models::rpa::insert_rpa_task_environment(
                 &svc_ctx.db,
@@ -207,14 +210,14 @@ pub async fn update_rpa_task_service(
     Ok(())
 }
 
-/// 删除 RPA 任务
+/// Soft-delete an RPA task.
 pub async fn delete_rpa_task_service(svc_ctx: &SvcCtx, task_uuid: Uuid) -> Result<(), String> {
     models::rpa::delete_rpa_task(&svc_ctx.db, task_uuid)
         .await
         .map_err(|e| e.to_string())
 }
 
-/// 批量删除 RPA 任务
+/// Soft-delete RPA tasks in batch.
 pub async fn batch_delete_rpa_tasks_service(
     svc_ctx: &SvcCtx,
     task_uuids: &[Uuid],
@@ -224,56 +227,22 @@ pub async fn batch_delete_rpa_tasks_service(
         .map_err(|e| e.to_string())
 }
 
-/// 运行 RPA 任务
-pub async fn run_rpa_task_service(svc_ctx: &SvcCtx, task_uuid: Uuid) -> Result<Uuid, String> {
-    // 获取任务信息
-    let task = models::rpa::fetch_rpa_task_by_uuid(&svc_ctx.db, task_uuid)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "RPA 任务不存在".to_string())?;
-
-    if task.status == "running" {
-        return Err("任务正在运行中".to_string());
-    }
-
-    // 获取步骤数
-    let steps = models::rpa::fetch_rpa_task_steps(&svc_ctx.db, task_uuid)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // 更新任务状态为运行中
-    models::rpa::update_rpa_task_status(&svc_ctx.db, task_uuid, "running")
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // 创建执行记录
-    let run_uuid = models::rpa::insert_rpa_task_run(&svc_ctx.db, task_uuid, steps.len() as i32)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(run_uuid)
-}
-
-/// 停止 RPA 任务
-pub async fn stop_rpa_task_service(svc_ctx: &SvcCtx, task_uuid: Uuid) -> Result<(), String> {
-    models::rpa::update_rpa_task_status(&svc_ctx.db, task_uuid, "idle")
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// 复制 RPA 任务
+/// Duplicate an RPA task.
 pub async fn duplicate_rpa_task_service(
     svc_ctx: &SvcCtx,
     user_uuid: Uuid,
     team_uuid: Option<Uuid>,
     payload: &DuplicateRpaTaskRequest,
 ) -> Result<Uuid, String> {
-    // 获取原任务信息
+    // Load source task data.
     let (task, steps, environment_uuids) = get_rpa_task_service(svc_ctx, payload.uuid).await?;
 
-    let new_name = payload.new_name.clone().unwrap_or_else(|| format!("{} (副本)", task.name));
+    let new_name = payload
+        .new_name
+        .clone()
+        .unwrap_or_else(|| format!("{} (copy)", task.name));
 
-    // 创建新任务
+    // Create duplicated task row.
     let new_task_uuid = models::rpa::insert_rpa_task(
         &svc_ctx.db,
         user_uuid,
@@ -296,7 +265,7 @@ pub async fn duplicate_rpa_task_service(
     .await
     .map_err(|e| e.to_string())?;
 
-    // 复制步骤
+    // Copy steps.
     for step in steps {
         models::rpa::insert_rpa_task_step(
             &svc_ctx.db,
@@ -308,12 +277,14 @@ pub async fn duplicate_rpa_task_service(
             step.position_x,
             step.position_y,
             step.sort_order,
+            step.next_step_uuid,
+            step.branch_config.as_ref(),
         )
         .await
         .map_err(|e| e.to_string())?;
     }
 
-    // 复制环境关联
+    // Copy environment bindings.
     for (i, env_uuid) in environment_uuids.iter().enumerate() {
         models::rpa::insert_rpa_task_environment(
             &svc_ctx.db,
@@ -328,7 +299,7 @@ pub async fn duplicate_rpa_task_service(
     Ok(new_task_uuid)
 }
 
-/// 导出 RPA 任务
+/// Export an RPA task.
 pub async fn export_rpa_task_service(
     svc_ctx: &SvcCtx,
     task_uuid: Uuid,
@@ -358,6 +329,8 @@ pub async fn export_rpa_task_service(
             "position_x": s.position_x,
             "position_y": s.position_y,
             "sort_order": s.sort_order,
+            "next_step_uuid": s.next_step_uuid,
+            "branch_config": s.branch_config,
         })).collect::<Vec<_>>(),
         "environment_uuids": environment_uuids,
     });
@@ -368,41 +341,5 @@ pub async fn export_rpa_task_service(
     Ok((content, filename))
 }
 
-/// 获取执行记录列表
-pub async fn get_rpa_runs_service(
-    svc_ctx: &SvcCtx,
-    payload: &ListRpaRunsRequest,
-) -> Result<(Vec<RpaTaskRunDto>, i64), String> {
-    let offset = (payload.pagination.page - 1) * payload.pagination.page_size;
 
-    let runs = models::rpa::fetch_rpa_task_runs(
-        &svc_ctx.db,
-        payload.task_uuid,
-        payload.status.as_deref(),
-        offset,
-        payload.pagination.page_size,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
 
-    let total = models::rpa::fetch_rpa_task_runs_count(
-        &svc_ctx.db,
-        payload.task_uuid,
-        payload.status.as_deref(),
-    )
-    .await
-    .map_err(|e| e.to_string())?;
-
-    Ok((runs, total))
-}
-
-/// 获取执行记录详情
-pub async fn get_rpa_run_service(
-    svc_ctx: &SvcCtx,
-    run_uuid: Uuid,
-) -> Result<RpaTaskRunDto, String> {
-    models::rpa::fetch_rpa_task_run_by_uuid(&svc_ctx.db, run_uuid)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "执行记录不存在".to_string())
-}

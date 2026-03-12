@@ -1,9 +1,8 @@
-use serde::{Deserialize, Serialize};
+﻿use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::Pagination;
 
-/// 查询 RPA 任务列表请求
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ListRpaTasksRequest {
     #[serde(flatten)]
@@ -11,7 +10,6 @@ pub struct ListRpaTasksRequest {
     pub filters: Option<RpaTaskFilters>,
 }
 
-/// RPA 任务筛选条件
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RpaTaskFilters {
     pub keyword: Option<String>,
@@ -20,7 +18,6 @@ pub struct RpaTaskFilters {
     pub tags: Option<Vec<String>>,
 }
 
-/// 创建 RPA 任务请求
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CreateRpaTaskRequest {
     pub name: String,
@@ -41,7 +38,6 @@ pub struct CreateRpaTaskRequest {
     pub steps: Option<Vec<RpaTaskStepRequest>>,
 }
 
-/// RPA 任务步骤请求
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RpaTaskStepRequest {
     pub step_type: String,
@@ -51,9 +47,10 @@ pub struct RpaTaskStepRequest {
     pub position_x: Option<i32>,
     pub position_y: Option<i32>,
     pub sort_order: Option<i32>,
+    pub next_step_uuid: Option<Uuid>,
+    pub branch_config: Option<serde_json::Value>,
 }
 
-/// 更新 RPA 任务请求
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UpdateRpaTaskRequest {
     pub uuid: Uuid,
@@ -75,34 +72,29 @@ pub struct UpdateRpaTaskRequest {
     pub steps: Option<Vec<RpaTaskStepRequest>>,
 }
 
-/// 运行 RPA 任务请求
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RunRpaTaskRequest {
     pub uuid: Uuid,
     pub environment_uuids: Option<Vec<Uuid>>,
 }
 
-/// 复制 RPA 任务请求
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DuplicateRpaTaskRequest {
     pub uuid: Uuid,
     pub new_name: Option<String>,
 }
 
-/// 导出 RPA 任务请求
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ExportRpaTaskRequest {
     pub uuid: Uuid,
 }
 
-/// 导入 RPA 任务请求
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ImportRpaTaskRequest {
     pub import_data: String,
     pub name: Option<String>,
 }
 
-/// 查询执行记录请求
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ListRpaRunsRequest {
     pub task_uuid: Uuid,
@@ -111,11 +103,8 @@ pub struct ListRpaRunsRequest {
     pub status: Option<String>,
 }
 
-// ========== 响应结构体 ==========
-
 use crate::dto::{RpaTaskDto, RpaTaskRunDto, RpaTaskStepDto};
 
-/// RPA 任务列表响应
 #[derive(Debug, Clone, Serialize)]
 pub struct RpaTaskListResponse {
     pub items: Vec<RpaTaskDto>,
@@ -124,7 +113,6 @@ pub struct RpaTaskListResponse {
     pub page_size: i64,
 }
 
-/// RPA 任务详情响应
 #[derive(Debug, Clone, Serialize)]
 pub struct RpaTaskDetailResponse {
     pub task: RpaTaskDto,
@@ -132,7 +120,6 @@ pub struct RpaTaskDetailResponse {
     pub environment_uuids: Vec<Uuid>,
 }
 
-/// RPA 任务执行记录列表响应
 #[derive(Debug, Clone, Serialize)]
 pub struct RpaRunsListResponse {
     pub items: Vec<RpaTaskRunDto>,
@@ -141,7 +128,6 @@ pub struct RpaRunsListResponse {
     pub page_size: i64,
 }
 
-/// 导出 RPA 任务响应
 #[derive(Debug, Clone, Serialize)]
 pub struct ExportRpaTaskResponse {
     pub content: String,

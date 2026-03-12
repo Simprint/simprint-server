@@ -1,4 +1,4 @@
-use sqlx::{Error, Pool, Postgres};
+﻿use sqlx::{Error, Pool, Postgres};
 use uuid::Uuid;
 
 use crate::dto::{RpaTaskDto, RpaTaskEnvironmentDto, RpaTaskRunDto, RpaTaskStepDto};
@@ -270,6 +270,8 @@ pub async fn insert_rpa_task_step(
     position_x: Option<i32>,
     position_y: Option<i32>,
     sort_order: Option<i32>,
+    next_step_uuid: Option<Uuid>,
+    branch_config: Option<&serde_json::Value>,
 ) -> Result<Uuid, Error> {
     let uuid: Uuid = sqlx::query_scalar(
         r#"
@@ -287,6 +289,8 @@ pub async fn insert_rpa_task_step(
     .bind(position_x)
     .bind(position_y)
     .bind(sort_order)
+    .bind(next_step_uuid)
+    .bind(branch_config)
     .fetch_one(pool)
     .await?;
 
@@ -525,3 +529,5 @@ pub async fn update_rpa_task_run_status(
 
     Ok(())
 }
+
+
