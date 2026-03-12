@@ -27,6 +27,7 @@ pub struct RpaTaskDto {
     pub status: String,
     pub run_count: Option<i32>,
     pub success_count: Option<i32>,
+    pub environment_count: Option<i64>,
     pub last_run_at: Option<DateTime<Utc>>,
     pub next_run_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,

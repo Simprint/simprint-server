@@ -61,6 +61,7 @@ pub async fn fetch_rpa_tasks(
     pool: &Pool<Postgres>,
     team_uuid: Option<Uuid>,
     user_uuid: Uuid,
+    keyword: Option<&str>,
     status: Option<&str>,
     trigger_type: Option<&str>,
     offset: i64,
@@ -72,17 +73,20 @@ pub async fn fetch_rpa_tasks(
                schedule, cron_expression, run_mode, retry_count, retry_interval, timeout,
                concurrency, stop_on_error, notify_on_complete, notify_on_error, status,
                run_count, success_count, last_run_at, next_run_at, created_at, updated_at, deleted_at
+             , (SELECT COUNT(*) FROM rpa_task_environments rte WHERE rte.task_uuid = rpa_tasks.uuid) AS environment_count
         FROM rpa_tasks
         WHERE (team_uuid = $1 OR (team_uuid IS NULL AND user_uuid = $2))
-          AND ($3::varchar IS NULL OR status = $3)
-          AND ($4::varchar IS NULL OR trigger_type = $4)
+          AND ($3::varchar IS NULL OR name ILIKE $3 OR COALESCE(description, '') ILIKE $3)
+          AND ($4::varchar IS NULL OR status = $4)
+          AND ($5::varchar IS NULL OR trigger_type = $5)
           AND deleted_at IS NULL
         ORDER BY created_at DESC
-        LIMIT $5 OFFSET $6
+        LIMIT $6 OFFSET $7
         "#,
     )
     .bind(team_uuid)
     .bind(user_uuid)
+    .bind(keyword.map(|k| format!("%{}%", k)))
     .bind(status)
     .bind(trigger_type)
     .bind(limit)
@@ -98,6 +102,7 @@ pub async fn fetch_rpa_tasks_count(
     pool: &Pool<Postgres>,
     team_uuid: Option<Uuid>,
     user_uuid: Uuid,
+    keyword: Option<&str>,
     status: Option<&str>,
     trigger_type: Option<&str>,
 ) -> Result<i64, Error> {
@@ -107,6 +112,7 @@ pub async fn fetch_rpa_tasks_count(
         WHERE (team_uuid = $1 OR (team_uuid IS NULL AND user_uuid = $2))
           AND ($3::varchar IS NULL OR status = $3)
           AND ($4::varchar IS NULL OR trigger_type = $4)
+          AND ($5::varchar IS NULL OR name ILIKE $5 OR COALESCE(description, '') ILIKE $5)
           AND deleted_at IS NULL
         "#,
     )
@@ -114,6 +120,7 @@ pub async fn fetch_rpa_tasks_count(
     .bind(user_uuid)
     .bind(status)
     .bind(trigger_type)
+    .bind(keyword.map(|k| format!("%{}%", k)))
     .fetch_one(pool)
     .await?;
 
@@ -131,6 +138,7 @@ pub async fn fetch_rpa_task_by_uuid(
                schedule, cron_expression, run_mode, retry_count, retry_interval, timeout,
                concurrency, stop_on_error, notify_on_complete, notify_on_error, status,
                run_count, success_count, last_run_at, next_run_at, created_at, updated_at, deleted_at
+             , (SELECT COUNT(*) FROM rpa_task_environments rte WHERE rte.task_uuid = rpa_tasks.uuid) AS environment_count
         FROM rpa_tasks
         WHERE uuid = $1 AND deleted_at IS NULL
         "#,

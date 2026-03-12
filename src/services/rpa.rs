@@ -16,6 +16,7 @@ pub async fn get_rpa_tasks_service(
 ) -> Result<(Vec<RpaTaskDto>, i64), String> {
     let offset = (payload.pagination.page - 1) * payload.pagination.page_size;
 
+    let keyword = payload.filters.as_ref().and_then(|f| f.keyword.as_deref());
     let status = payload.filters.as_ref().and_then(|f| f.status.as_deref());
     let trigger_type = payload.filters.as_ref().and_then(|f| f.trigger_type.as_deref());
 
@@ -23,6 +24,7 @@ pub async fn get_rpa_tasks_service(
         &svc_ctx.db,
         team_uuid,
         user_uuid,
+        keyword,
         status,
         trigger_type,
         offset,
@@ -32,9 +34,16 @@ pub async fn get_rpa_tasks_service(
     .map_err(|e| e.to_string())?;
 
     let total =
-        models::rpa::fetch_rpa_tasks_count(&svc_ctx.db, team_uuid, user_uuid, status, trigger_type)
-            .await
-            .map_err(|e| e.to_string())?;
+        models::rpa::fetch_rpa_tasks_count(
+            &svc_ctx.db,
+            team_uuid,
+            user_uuid,
+            keyword,
+            status,
+            trigger_type,
+        )
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok((tasks, total))
 }
