@@ -6,7 +6,8 @@ use crate::caches::{
 };
 use crate::entitys::{
     CreateMachineUserRequest, LoginRequest, LoginResponse, MachineInfo, RegisterRequest,
-    RegisterResponse, ResetPasswordRequest, UpdatePasswordRequest, UpdateUserRequest, UserResponse,
+    RegisterResponse, ResetPasswordRequest, UpdatePasswordRequest, UpdateUserRequest,
+    UserResponse, VerifyPasswordRequest, VerifyPasswordResponse,
 };
 use crate::models::{
     billing,
@@ -411,6 +412,25 @@ pub async fn update_password_service(
     update_password(pool, user_uuid, &password_hash).await?;
 
     Ok(())
+}
+
+/// 校验当前用户密码
+pub async fn verify_password_service(
+    svc_ctx: &SvcCtx,
+    user_uuid: Uuid,
+    payload: &VerifyPasswordRequest,
+) -> Result<VerifyPasswordResponse, anyhow::Error> {
+    let user_info = fetch_user_info_by_uuid(&svc_ctx.db, user_uuid)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("用户不存在"))?;
+
+    if user_info.status != "active" {
+        return Err(anyhow::anyhow!("用户已被禁用"));
+    }
+
+    Ok(VerifyPasswordResponse {
+        valid: verify_password(&payload.password, &user_info.password),
+    })
 }
 
 /// 重置密码服务

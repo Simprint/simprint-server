@@ -4,12 +4,13 @@ use crate::audit_log;
 use crate::entitys::{
     LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, ResetPasswordRequest,
     SendCodeRequest, UpdatePasswordRequest, UpdateUserRequest, UserResponse,
+    VerifyPasswordRequest, VerifyPasswordResponse,
 };
 use crate::services::audit::log_audit_anonymous;
 use crate::services::users::{
     get_current_user_service, login_service, refresh_token_service, register_service,
     reset_password_service, send_verification_code_service, update_password_service,
-    update_user_service,
+    update_user_service, verify_password_service,
 };
 use crate::state::RequestContext;
 use crate::svc_ctx::SvcCtx;
@@ -110,6 +111,19 @@ pub async fn update_password_handler(
     audit_log!(&svc_ctx, &ctx, "update_password", "user", "修改密码").await;
 
     Ok(Response::success(Some("修改成功"), None))
+}
+
+/// 校验当前用户密码处理
+pub async fn verify_password_handler(
+    State(svc_ctx): State<SvcCtx>,
+    Extension(ctx): Extension<RequestContext>,
+    Json(payload): Json<VerifyPasswordRequest>,
+) -> Result<VerifyPasswordResponse> {
+    let result = verify_password_service(&svc_ctx, ctx.user_uuid_unwrap(), &payload)
+        .await
+        .map_err(|e| Response::fail(Some(&e.to_string())))?;
+
+    Ok(Response::success(Some("校验成功"), Some(result)))
 }
 
 /// 重置密码处理

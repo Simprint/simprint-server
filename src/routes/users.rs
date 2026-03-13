@@ -3,6 +3,7 @@ use axum::routing::post;
 use crate::handlers::{
     get_current_user_handler, login_handler, refresh_token_handler, register_handler,
     reset_password_handler, send_code_handler, update_password_handler, update_user_handler,
+    verify_password_handler,
 };
 use crate::routes::route::{self, MetaRoute};
 
@@ -29,6 +30,11 @@ pub fn register_routes(meta_route: &mut MetaRoute) -> () {
     user_route.add_route_item(route::RouteItem::post(
         "/password",
         post(update_password_handler),
+    ));
+
+    user_route.add_route_item(route::RouteItem::post(
+        "/verify-password",
+        post(verify_password_handler),
     ));
 
     user_route.add_route_item(route::RouteItem::post(

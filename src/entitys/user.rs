@@ -87,6 +87,12 @@ pub struct UpdatePasswordRequest {
     pub new_password: String,
 }
 
+/// 校验当前用户密码请求
+#[derive(Debug, Deserialize, Serialize, Default)]
+pub struct VerifyPasswordRequest {
+    pub password: String,
+}
+
 /// 重置密码请求
 #[derive(Debug, Deserialize, Serialize, Default)]
 pub struct ResetPasswordRequest {
@@ -137,4 +143,10 @@ pub struct RegisterResponse {
     pub access_token: String,
     pub refresh_token: String,
     pub user_info: Option<UserResponse>,
+}
+
+/// 密码校验响应
+#[derive(Debug, Serialize)]
+pub struct VerifyPasswordResponse {
+    pub valid: bool,
 }
