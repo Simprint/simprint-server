@@ -19,11 +19,15 @@ pub async fn get_extensions_service(
 
     let keyword = payload.filters.as_ref().and_then(|f| f.keyword.as_deref());
     let category = payload.filters.as_ref().and_then(|f| f.category.as_deref());
+    let sort_by = payload.filters.as_ref().and_then(|f| f.sort_by.as_deref());
+    let sort_order = payload.filters.as_ref().and_then(|f| f.sort_order.as_deref());
 
     let mut extensions = models::extensions::fetch_extensions(
         &svc_ctx.db,
         keyword,
         category,
+        sort_by,
+        sort_order,
         offset,
         payload.pagination.page_size,
     )

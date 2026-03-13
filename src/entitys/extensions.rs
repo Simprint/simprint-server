@@ -72,6 +72,8 @@ pub struct ExtensionFilters {
     pub keyword: Option<String>,
     pub category: Option<String>,
     pub installed_only: Option<bool>,
+    pub sort_by: Option<String>,
+    pub sort_order: Option<String>,
 }
 
 /// 安装扩展请求

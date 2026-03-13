@@ -40,11 +40,14 @@ pub async fn fetch_platform_accounts(
     pool: &Pool<Postgres>,
     team_uuid: Option<Uuid>,
     user_uuid: Uuid,
+    keyword: Option<&str>,
     platform_name: Option<&str>,
     status: Option<&str>,
     offset: i64,
     limit: i64,
 ) -> Result<Vec<PlatformAccountDto>, Error> {
+    let keyword = keyword.map(|value| format!("%{}%", value.trim()));
+
     let recs = sqlx::query_as::<_, PlatformAccountDto>(
         r#"
         SELECT pa.id, pa.uuid, pa.user_uuid, pa.team_uuid, pa.platform_url, pa.platform_name,
@@ -53,15 +56,23 @@ pub async fn fetch_platform_accounts(
                pa.last_used_at, pa.created_at, pa.updated_at, pa.deleted_at
         FROM platform_accounts pa
         WHERE (pa.team_uuid = $1 OR (pa.team_uuid IS NULL AND pa.user_uuid = $2))
-          AND ($3::varchar IS NULL OR pa.platform_name = $3)
-          AND ($4::varchar IS NULL OR pa.status = $4)
+          AND (
+            $3::text IS NULL
+            OR pa.platform_url ILIKE $3
+            OR COALESCE(pa.platform_name, '') ILIKE $3
+            OR pa.account ILIKE $3
+            OR COALESCE(pa.remark, '') ILIKE $3
+          )
+          AND ($4::varchar IS NULL OR pa.platform_name = $4)
+          AND ($5::varchar IS NULL OR pa.status = $5)
           AND pa.deleted_at IS NULL
         ORDER BY pa.created_at DESC
-        LIMIT $5 OFFSET $6
+        LIMIT $6 OFFSET $7
         "#,
     )
     .bind(team_uuid)
     .bind(user_uuid)
+    .bind(keyword)
     .bind(platform_name)
     .bind(status)
     .bind(limit)
@@ -77,20 +88,31 @@ pub async fn fetch_platform_accounts_count(
     pool: &Pool<Postgres>,
     team_uuid: Option<Uuid>,
     user_uuid: Uuid,
+    keyword: Option<&str>,
     platform_name: Option<&str>,
     status: Option<&str>,
 ) -> Result<i64, Error> {
+    let keyword = keyword.map(|value| format!("%{}%", value.trim()));
+
     let count: i64 = sqlx::query_scalar(
         r#"
         SELECT COUNT(*) FROM platform_accounts
         WHERE (team_uuid = $1 OR (team_uuid IS NULL AND user_uuid = $2))
-          AND ($3::varchar IS NULL OR platform_name = $3)
-          AND ($4::varchar IS NULL OR status = $4)
+          AND (
+            $3::text IS NULL
+            OR platform_url ILIKE $3
+            OR COALESCE(platform_name, '') ILIKE $3
+            OR account ILIKE $3
+            OR COALESCE(remark, '') ILIKE $3
+          )
+          AND ($4::varchar IS NULL OR platform_name = $4)
+          AND ($5::varchar IS NULL OR status = $5)
           AND deleted_at IS NULL
         "#,
     )
     .bind(team_uuid)
     .bind(user_uuid)
+    .bind(keyword)
     .bind(platform_name)
     .bind(status)
     .fetch_one(pool)

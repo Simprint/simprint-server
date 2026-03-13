@@ -181,6 +181,7 @@ pub async fn get_audit_logs_service(
     let offset = (payload.pagination.page - 1) * payload.pagination.page_size;
 
     let user_uuid_filter = payload.filters.as_ref().and_then(|f| f.user_uuid);
+    let keyword = payload.filters.as_ref().and_then(|f| f.keyword.as_deref());
     let action = payload.filters.as_ref().and_then(|f| f.action.as_deref());
     let target_type = payload.filters.as_ref().and_then(|f| f.target_type.as_deref());
 
@@ -189,6 +190,7 @@ pub async fn get_audit_logs_service(
         current_user_uuid,
         team_uuid,
         user_uuid_filter,
+        keyword,
         action,
         target_type,
         offset,
@@ -202,6 +204,7 @@ pub async fn get_audit_logs_service(
         current_user_uuid,
         team_uuid,
         user_uuid_filter,
+        keyword,
         action,
         target_type,
     )
@@ -230,7 +233,15 @@ pub async fn get_audit_stats_service(
 ) -> Result<AuditStatsResponse, String> {
     // 总数
     let total_logs =
-        models::fetch_audit_logs_count(&svc_ctx.db, current_user_uuid, team_uuid, None, None, None)
+        models::fetch_audit_logs_count(
+            &svc_ctx.db,
+            current_user_uuid,
+            team_uuid,
+            None,
+            None,
+            None,
+            None,
+        )
             .await
             .map_err(|e| e.to_string())?;
 

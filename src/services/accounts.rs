@@ -44,19 +44,38 @@ pub async fn get_accounts_service(
     team_uuid: Option<Uuid>,
     payload: &ListAccountsRequest,
 ) -> Result<(Vec<PlatformAccountDto>, i64), String> {
-    let offset = (payload.pagination.page - 1) * payload.pagination.page_size;
+    let page = payload.pagination.page.max(1);
+    let page_size = payload.pagination.page_size.max(1);
+    let offset = (page - 1) * page_size;
 
-    let platform_name = payload.filters.as_ref().and_then(|f| f.platform_name.as_deref());
-    let status = payload.filters.as_ref().and_then(|f| f.status.as_deref());
+    let keyword = payload
+        .filters
+        .as_ref()
+        .and_then(|f| f.keyword.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let platform_name = payload
+        .filters
+        .as_ref()
+        .and_then(|f| f.platform_name.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let status = payload
+        .filters
+        .as_ref()
+        .and_then(|f| f.status.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
 
     let accounts = models::fetch_platform_accounts(
         &svc_ctx.db,
         team_uuid,
         user_uuid,
+        keyword,
         platform_name,
         status,
         offset,
-        payload.pagination.page_size,
+        page_size,
     )
     .await
     .map_err(|e| e.to_string())?;
@@ -65,6 +84,7 @@ pub async fn get_accounts_service(
         &svc_ctx.db,
         team_uuid,
         user_uuid,
+        keyword,
         platform_name,
         status,
     )

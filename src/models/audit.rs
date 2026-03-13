@@ -53,6 +53,7 @@ pub async fn fetch_audit_logs(
     current_user_uuid: Uuid,
     team_uuid: Option<Uuid>,
     user_uuid_filter: Option<Uuid>,
+    keyword: Option<&str>,
     action: Option<&str>,
     target_type: Option<&str>,
     offset: i64,
@@ -71,15 +72,17 @@ pub async fn fetch_audit_logs(
             OR (a.team_uuid IS NULL AND a.user_uuid = $1)
         )
           AND ($3::uuid IS NULL OR a.user_uuid = $3)
-          AND ($4::varchar IS NULL OR a.action = $4)
-          AND ($5::varchar IS NULL OR a.target_type = $5)
+          AND ($4::text IS NULL OR COALESCE(a.details, '') ILIKE '%' || $4 || '%')
+          AND ($5::varchar IS NULL OR a.action = $5)
+          AND ($6::varchar IS NULL OR a.target_type = $6)
         ORDER BY a.created_at DESC
-        LIMIT $6 OFFSET $7
+        LIMIT $7 OFFSET $8
         "#,
     )
     .bind(current_user_uuid)
     .bind(team_uuid)
     .bind(user_uuid_filter)
+    .bind(keyword)
     .bind(action)
     .bind(target_type)
     .bind(limit)
@@ -96,6 +99,7 @@ pub async fn fetch_audit_logs_count(
     current_user_uuid: Uuid,
     team_uuid: Option<Uuid>,
     user_uuid_filter: Option<Uuid>,
+    keyword: Option<&str>,
     action: Option<&str>,
     target_type: Option<&str>,
 ) -> Result<i64, Error> {
@@ -107,13 +111,15 @@ pub async fn fetch_audit_logs_count(
             OR (team_uuid IS NULL AND user_uuid = $1)
         )
           AND ($3::uuid IS NULL OR user_uuid = $3)
-          AND ($4::varchar IS NULL OR action = $4)
-          AND ($5::varchar IS NULL OR target_type = $5)
+          AND ($4::text IS NULL OR COALESCE(details, '') ILIKE '%' || $4 || '%')
+          AND ($5::varchar IS NULL OR action = $5)
+          AND ($6::varchar IS NULL OR target_type = $6)
         "#,
     )
     .bind(current_user_uuid)
     .bind(team_uuid)
     .bind(user_uuid_filter)
+    .bind(keyword)
     .bind(action)
     .bind(target_type)
     .fetch_one(pool)

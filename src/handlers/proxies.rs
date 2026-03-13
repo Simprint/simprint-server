@@ -21,7 +21,13 @@ pub async fn get_proxies_handler(
         .ok_or_else(|| Response::fail(Some("请先选择工作空间")))?;
     
     let (proxies, total) =
-        services::proxies::get_proxies_service(&svc_ctx, ctx.user_uuid_unwrap(), workspace_uuid, &payload)
+        services::proxies::get_proxies_service(
+            &svc_ctx,
+            ctx.user_uuid_unwrap(),
+            workspace_uuid,
+            ctx.current_team_uuid,
+            &payload,
+        )
             .await
             .map_err(|e| Response::fail(Some(&e)))?;
 

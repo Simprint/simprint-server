@@ -14,6 +14,7 @@ pub struct SwitchReferralLinkRequest {
 pub struct ListReferralRewardsRequest {
     #[serde(flatten)]
     pub pagination: Pagination,
+    pub keyword: Option<String>,
     pub reward_type: Option<String>,
     pub status: Option<String>,
 }
@@ -23,6 +24,7 @@ pub struct ListReferralRewardsRequest {
 pub struct ListReferredUsersRequest {
     #[serde(flatten)]
     pub pagination: Pagination,
+    pub keyword: Option<String>,
     pub status: Option<String>,
 }
 

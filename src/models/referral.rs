@@ -207,6 +207,7 @@ pub async fn switch_current_referral_link(
 pub async fn fetch_referred_users(
     pool: &Pool<Postgres>,
     inviter_uuid: Uuid,
+    keyword: Option<&str>,
     status: Option<&str>,
     offset: i64,
     limit: i64,
@@ -224,12 +225,14 @@ pub async fn fetch_referred_users(
         FROM user_referrals ur
         JOIN user_infos ui ON ui.user_uuid = ur.invitee_uuid
         WHERE ur.inviter_uuid = $1
-          AND ($2::varchar IS NULL OR ur.status = $2)
+          AND ($2::text IS NULL OR ui.email ILIKE '%' || $2 || '%')
+          AND ($3::varchar IS NULL OR ur.status = $3)
         ORDER BY registered_at DESC
-        LIMIT $3 OFFSET $4
+        LIMIT $4 OFFSET $5
         "#,
     )
     .bind(inviter_uuid)
+    .bind(keyword)
     .bind(status)
     .bind(limit)
     .bind(offset)
@@ -243,16 +246,21 @@ pub async fn fetch_referred_users(
 pub async fn fetch_referred_users_count(
     pool: &Pool<Postgres>,
     inviter_uuid: Uuid,
+    keyword: Option<&str>,
     status: Option<&str>,
 ) -> Result<i64, Error> {
     let count: i64 = sqlx::query_scalar(
         r#"
-        SELECT COUNT(*) FROM user_referrals
-        WHERE inviter_uuid = $1
-          AND ($2::varchar IS NULL OR status = $2)
+        SELECT COUNT(*)
+        FROM user_referrals ur
+        JOIN user_infos ui ON ui.user_uuid = ur.invitee_uuid
+        WHERE ur.inviter_uuid = $1
+          AND ($2::text IS NULL OR ui.email ILIKE '%' || $2 || '%')
+          AND ($3::varchar IS NULL OR ur.status = $3)
         "#,
     )
     .bind(inviter_uuid)
+    .bind(keyword)
     .bind(status)
     .fetch_one(pool)
     .await?;
@@ -294,6 +302,7 @@ pub async fn fetch_referral_stats(
 pub async fn fetch_referral_rewards(
     pool: &Pool<Postgres>,
     user_uuid: Uuid,
+    keyword: Option<&str>,
     reward_type: Option<&str>,
     status: Option<&str>,
     offset: i64,
@@ -305,13 +314,15 @@ pub async fn fetch_referral_rewards(
                referred_user_uuid, link_uuid, status, created_at
         FROM referral_rewards
         WHERE user_uuid = $1
-          AND ($2::varchar IS NULL OR reward_type = $2)
-          AND ($3::varchar IS NULL OR status = $3)
+          AND ($2::text IS NULL OR COALESCE(description, '') ILIKE '%' || $2 || '%')
+          AND ($3::varchar IS NULL OR reward_type = $3)
+          AND ($4::varchar IS NULL OR status = $4)
         ORDER BY created_at DESC
-        LIMIT $4 OFFSET $5
+        LIMIT $5 OFFSET $6
         "#,
     )
     .bind(user_uuid)
+    .bind(keyword)
     .bind(reward_type)
     .bind(status)
     .bind(limit)
@@ -326,6 +337,7 @@ pub async fn fetch_referral_rewards(
 pub async fn fetch_referral_rewards_count(
     pool: &Pool<Postgres>,
     user_uuid: Uuid,
+    keyword: Option<&str>,
     reward_type: Option<&str>,
     status: Option<&str>,
 ) -> Result<i64, Error> {
@@ -333,11 +345,13 @@ pub async fn fetch_referral_rewards_count(
         r#"
         SELECT COUNT(*) FROM referral_rewards
         WHERE user_uuid = $1
-          AND ($2::varchar IS NULL OR reward_type = $2)
-          AND ($3::varchar IS NULL OR status = $3)
+          AND ($2::text IS NULL OR COALESCE(description, '') ILIKE '%' || $2 || '%')
+          AND ($3::varchar IS NULL OR reward_type = $3)
+          AND ($4::varchar IS NULL OR status = $4)
         "#,
     )
     .bind(user_uuid)
+    .bind(keyword)
     .bind(reward_type)
     .bind(status)
     .fetch_one(pool)

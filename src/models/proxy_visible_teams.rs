@@ -166,3 +166,121 @@ pub async fn fetch_visible_proxies_for_user(
 
     Ok(recs)
 }
+
+/// 分页查询用户可见的代理列表，并支持名称搜索和筛选
+pub async fn fetch_visible_proxies_for_user_paginated(
+    pool: &Pool<Postgres>,
+    workspace_uuid: Uuid,
+    user_uuid: Uuid,
+    team_uuid: Option<Uuid>,
+    name_keyword: Option<&str>,
+    proxy_type: Option<&str>,
+    status: Option<&str>,
+    country: Option<&str>,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<ProxyDto>, Error> {
+    let name_keyword = name_keyword.map(|keyword| format!("%{}%", keyword.trim()));
+
+    let recs = sqlx::query_as::<_, ProxyDto>(
+        r#"
+        SELECT DISTINCT p.id, p.uuid, p.workspace_uuid, p.owner_uuid, p.name, p.host, p.port, p.proxy_type,
+               p.username, p.password_encrypted, p.ssh_key_encrypted, p.ssh_passphrase_encrypted,
+               p.country, p.city, p.status, p.latency, p.last_check_ip, p.last_checked_at,
+               (SELECT COUNT(*) FROM environments e WHERE e.proxy_uuid = p.uuid AND e.deleted_at IS NULL) AS environments_count,
+               p.created_at, p.updated_at, p.deleted_at
+        FROM proxies p
+        WHERE p.workspace_uuid = $1
+          AND p.deleted_at IS NULL
+          AND ($4::text IS NULL OR p.name ILIKE $4)
+          AND ($5::text IS NULL OR p.proxy_type = $5)
+          AND ($6::text IS NULL OR p.status = $6)
+          AND ($7::text IS NULL OR p.country = $7)
+          AND (
+            EXISTS (
+                SELECT 1 FROM workspaces w
+                WHERE w.uuid = $1 AND w.owner_uuid = $2 AND w.deleted_at IS NULL
+            )
+            OR p.owner_uuid = $2
+            OR (
+                $3 IS NOT NULL
+                AND EXISTS (
+                    SELECT 1 FROM proxy_visible_teams pvt
+                    WHERE pvt.proxy_uuid = p.uuid
+                      AND pvt.workspace_uuid = $1
+                      AND pvt.team_uuid = $3
+                )
+            )
+          )
+        ORDER BY p.created_at DESC
+        OFFSET $8 LIMIT $9
+        "#,
+    )
+    .bind(workspace_uuid)
+    .bind(user_uuid)
+    .bind(team_uuid)
+    .bind(name_keyword)
+    .bind(proxy_type)
+    .bind(status)
+    .bind(country)
+    .bind(offset)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(recs)
+}
+
+/// 查询用户可见代理总数，并支持名称搜索和筛选
+pub async fn fetch_visible_proxies_for_user_count(
+    pool: &Pool<Postgres>,
+    workspace_uuid: Uuid,
+    user_uuid: Uuid,
+    team_uuid: Option<Uuid>,
+    name_keyword: Option<&str>,
+    proxy_type: Option<&str>,
+    status: Option<&str>,
+    country: Option<&str>,
+) -> Result<i64, Error> {
+    let name_keyword = name_keyword.map(|keyword| format!("%{}%", keyword.trim()));
+
+    let count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(DISTINCT p.uuid)
+        FROM proxies p
+        WHERE p.workspace_uuid = $1
+          AND p.deleted_at IS NULL
+          AND ($4::text IS NULL OR p.name ILIKE $4)
+          AND ($5::text IS NULL OR p.proxy_type = $5)
+          AND ($6::text IS NULL OR p.status = $6)
+          AND ($7::text IS NULL OR p.country = $7)
+          AND (
+            EXISTS (
+                SELECT 1 FROM workspaces w
+                WHERE w.uuid = $1 AND w.owner_uuid = $2 AND w.deleted_at IS NULL
+            )
+            OR p.owner_uuid = $2
+            OR (
+                $3 IS NOT NULL
+                AND EXISTS (
+                    SELECT 1 FROM proxy_visible_teams pvt
+                    WHERE pvt.proxy_uuid = p.uuid
+                      AND pvt.workspace_uuid = $1
+                      AND pvt.team_uuid = $3
+                )
+            )
+          )
+        "#,
+    )
+    .bind(workspace_uuid)
+    .bind(user_uuid)
+    .bind(team_uuid)
+    .bind(name_keyword)
+    .bind(proxy_type)
+    .bind(status)
+    .bind(country)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(count)
+}

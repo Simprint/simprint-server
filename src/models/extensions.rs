@@ -114,10 +114,26 @@ pub async fn fetch_extensions(
     pool: &Pool<Postgres>,
     keyword: Option<&str>,
     category: Option<&str>,
+    sort_by: Option<&str>,
+    sort_order: Option<&str>,
     offset: i64,
     limit: i64,
 ) -> Result<Vec<ExtensionDto>, Error> {
-    let recs = sqlx::query_as::<_, ExtensionDto>(
+    let order_clause = match (
+        sort_by.unwrap_or("downloads"),
+        sort_order.unwrap_or("desc").to_ascii_lowercase().as_str(),
+    ) {
+        ("rating", "asc") => "rating ASC NULLS LAST, created_at DESC",
+        ("rating", _) => "rating DESC NULLS LAST, created_at DESC",
+        ("name", "asc") => "name ASC, created_at DESC",
+        ("name", _) => "name DESC, created_at DESC",
+        ("newest", "asc") => "updated_at ASC NULLS LAST, created_at ASC",
+        ("newest", _) => "updated_at DESC NULLS LAST, created_at DESC",
+        ("downloads", "asc") => "downloads_count ASC NULLS LAST, created_at DESC",
+        _ => "downloads_count DESC NULLS LAST, created_at DESC",
+    };
+
+    let query = format!(
         r#"
         SELECT id, uuid, extension_id, name, description, version, category, browser,
                developer, homepage, icon_url, download_url, file_size, downloads_count,
@@ -126,10 +142,13 @@ pub async fn fetch_extensions(
         WHERE status = 'active'
           AND ($1::varchar IS NULL OR name ILIKE '%' || $1 || '%' OR description ILIKE '%' || $1 || '%')
           AND ($2::varchar IS NULL OR category = $2)
-        ORDER BY downloads_count DESC NULLS LAST
+        ORDER BY {}
         LIMIT $3 OFFSET $4
         "#,
-    )
+        order_clause
+    );
+
+    let recs = sqlx::query_as::<_, ExtensionDto>(&query)
     .bind(keyword)
     .bind(category)
     .bind(limit)

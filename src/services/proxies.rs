@@ -61,48 +61,60 @@ pub async fn get_proxies_service(
     svc_ctx: &SvcCtx,
     user_uuid: Uuid,
     workspace_uuid: Uuid,
+    current_team_uuid: Option<Uuid>,
     payload: &ListProxiesRequest,
 ) -> Result<(Vec<ProxyDto>, i64), String> {
-    // 获取用户当前团队（用于过滤可见的代理）
-    let current_team_uuid = models::fetch_user_current_team(&svc_ctx.db, user_uuid)
-        .await
-        .map_err(|e| e.to_string())?;
+    let filters = payload.filters.as_ref();
+    let keyword = filters
+        .and_then(|f| f.keyword.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let proxy_type = filters
+        .and_then(|f| f.proxy_type.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let status = filters
+        .and_then(|f| f.status.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let country = filters
+        .and_then(|f| f.country.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
 
-    // 使用可见性过滤获取代理列表
-    let proxies = models::fetch_visible_proxies_for_user(
+    let page = payload.pagination.page.max(1);
+    let page_size = payload.pagination.page_size.max(1);
+    let offset = (page - 1) * page_size;
+
+    let proxies = models::fetch_visible_proxies_for_user_paginated(
         &svc_ctx.db,
         workspace_uuid,
         user_uuid,
         current_team_uuid,
+        keyword,
+        proxy_type,
+        status,
+        country,
+        offset,
+        page_size,
     )
     .await
     .map_err(|e| e.to_string())?;
 
-    // 应用类型和状态过滤
-    let proxy_type = payload.filters.as_ref().and_then(|f| f.proxy_type.as_deref());
-    let status = payload.filters.as_ref().and_then(|f| f.status.as_deref());
+    let total = models::fetch_visible_proxies_for_user_count(
+        &svc_ctx.db,
+        workspace_uuid,
+        user_uuid,
+        current_team_uuid,
+        keyword,
+        proxy_type,
+        status,
+        country,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
 
-    let mut filtered_proxies: Vec<ProxyDto> = proxies
-        .into_iter()
-        .filter(|p| {
-            (proxy_type.is_none() || p.proxy_type == proxy_type.unwrap())
-                && (status.is_none() || p.status == status.unwrap())
-        })
-        .collect();
-
-    // 应用分页
-    let total = filtered_proxies.len() as i64;
-    let offset = ((payload.pagination.page - 1) * payload.pagination.page_size) as usize;
-    let limit = payload.pagination.page_size as usize;
-    let paginated_proxies = if offset < filtered_proxies.len() {
-        filtered_proxies
-            .drain(offset..std::cmp::min(offset + limit, filtered_proxies.len()))
-            .collect()
-    } else {
-        vec![]
-    };
-
-    Ok((paginated_proxies, total))
+    Ok((proxies, total))
 }
 
 /// 获取代理详情

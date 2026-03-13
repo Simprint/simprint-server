@@ -238,6 +238,7 @@ pub async fn get_referral_rewards_service(
     let rewards = models::referral::fetch_referral_rewards(
         &svc_ctx.db,
         user_uuid,
+        payload.keyword.as_deref(),
         payload.reward_type.as_deref(),
         payload.status.as_deref(),
         offset,
@@ -249,6 +250,7 @@ pub async fn get_referral_rewards_service(
     let total = models::referral::fetch_referral_rewards_count(
         &svc_ctx.db,
         user_uuid,
+        payload.keyword.as_deref(),
         payload.reward_type.as_deref(),
         payload.status.as_deref(),
     )
@@ -269,6 +271,7 @@ pub async fn get_referred_users_service(
     let rows = models::referral::fetch_referred_users(
         &svc_ctx.db,
         user_uuid,
+        payload.keyword.as_deref(),
         payload.status.as_deref(),
         offset,
         payload.pagination.page_size,
@@ -295,6 +298,7 @@ pub async fn get_referred_users_service(
     let total = models::referral::fetch_referred_users_count(
         &svc_ctx.db,
         user_uuid,
+        payload.keyword.as_deref(),
         payload.status.as_deref(),
     )
     .await
