@@ -22,7 +22,6 @@ pub mod teams;
 pub mod templates;
 pub mod workspace_quotas;
 pub mod workspaces;
-pub mod events;
 
 pub use health::*;
 pub use secret::*;
