@@ -47,7 +47,7 @@ smtp_password = "NSgjTyY6uSQwPGwV"
 [workspace_quota]
 # 默认配额（新用户注册和手动创建工作空间都使用此配置）
 [workspace_quota.default]
-max_environments = 8
-max_team_members = 1
+max_environments = 99999
+max_team_members = 99999
 max_proxies = 99999
 max_rpa_tasks = 99999
