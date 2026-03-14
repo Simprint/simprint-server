@@ -44,14 +44,13 @@ pub async fn get_version_by_id(svc_ctx: &SvcCtx, id: i32) -> Result<Version, Sim
         .await
         .map_err(|_| SimprintError::VersionNotFound)?;
 
-    let minio_config = &svc_ctx.config.minio;
-    let (bucket_name, resource_url) = (
-        &minio_config.version_resource_bucket,
-        &minio_config.resource_url,
-    );
-    let name = version.name.clone().unwrap_or_default();
-
-    version.url = Some(get_version_resource_url(&bucket_name, &resource_url, &name));
+    let storage_config = &svc_ctx.config.storage;
+    let object_path = version.url.clone().unwrap_or_default();
+    version.url = Some(get_version_resource_url(
+        &storage_config.public_base_url,
+        &storage_config.version_root,
+        &object_path,
+    ));
 
     Ok(version)
 }
@@ -224,17 +223,13 @@ pub async fn get_all_active_latest_versions_service(
     // 转换为 HashMap<type_code, Vec<Version>>
     let mut map: HashMap<String, Vec<Version>> = HashMap::new();
 
-    let minio_config = &svc_ctx.config.minio;
-    let (bucket_name, resource_url) = (
-        &minio_config.version_resource_bucket,
-        &minio_config.resource_url,
-    );
+    let storage_config = &svc_ctx.config.storage;
 
     for (type_code, _resource_name, version) in results {
         map.entry(type_code).or_insert_with(Vec::new).push(Version {
             url: Some(get_version_resource_url(
-                &bucket_name,
-                &resource_url,
+                &storage_config.public_base_url,
+                &storage_config.version_root,
                 &version.url.unwrap_or_default(),
             )),
             ..version

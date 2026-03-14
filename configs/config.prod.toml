@@ -29,14 +29,15 @@ idle_timeout = 600
 [redis]
 url = "redis://111.230.19.75:6380?protocol=resp3"
 
-[minio]
-server_url = "http://111.230.19.75:9000"
-resource_url = "http://111.230.19.75:9000"
-access_key = "5kSjAHnITsMZQEwzJN2g"
-secret_access_key = "eGs3ntV5KvmVzMbLpQwj86w5b5vdSHxUcmqcYhay"
-avatar_bucket = "avatars"
-extension_bucket = "extensions"
-version_resource_bucket = "versions"
+[storage]
+endpoint = "https://503bc762ec98603e9ff53f374d78df22.r2.cloudflarestorage.com"
+public_base_url = "https://pub-39307a5e69c74324855a762027cbf9bf.r2.dev"
+access_key = "9295bc8f31a4bc6ce80d0014e29e6896"
+secret_access_key = "60a9cd6d3dd6b10ea0f0aaf2411c127bfb01ef8700a62bf8cb3a8bf6c3bb6d73"
+bucket = "simprint-client"
+avatar_root = "avatars"
+extension_root = "extensions"
+version_root = "versions"
 
 [smtp]
 smtp_server = "smtp.163.com"

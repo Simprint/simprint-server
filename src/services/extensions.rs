@@ -8,7 +8,7 @@ use crate::entitys::{
 use crate::models;
 use crate::models::environments as env_models;
 use crate::svc_ctx::SvcCtx;
-use crate::utils::minios::get_objects;
+use crate::utils::storage::get_objects;
 
 /// 获取扩展列表
 pub async fn get_extensions_service(
@@ -35,9 +35,9 @@ pub async fn get_extensions_service(
     .map_err(|e| e.to_string())?;
 
     // 将 object path 转换为完整 URL
-    let resource_url = svc_ctx.config.minio.resource_url.as_str();
-    let extension_bucket = svc_ctx.config.minio.extension_bucket.as_str();
-    ExtensionDto::transform_urls_batch(&mut extensions, resource_url, extension_bucket);
+    let public_base_url = svc_ctx.config.storage.public_base_url.as_str();
+    let extension_root = svc_ctx.config.storage.extension_root.as_str();
+    ExtensionDto::transform_urls_batch(&mut extensions, public_base_url, extension_root);
 
     let total = models::extensions::fetch_extensions_count(&svc_ctx.db, keyword, category)
         .await
@@ -57,9 +57,9 @@ pub async fn get_extension_service(
         .ok_or_else(|| "扩展不存在".to_string())?;
 
     // 将 object path 转换为完整 URL
-    let resource_url = svc_ctx.config.minio.resource_url.as_str();
-    let extension_bucket = svc_ctx.config.minio.extension_bucket.as_str();
-    extension.transform_urls(&resource_url, &extension_bucket);
+    let public_base_url = svc_ctx.config.storage.public_base_url.as_str();
+    let extension_root = svc_ctx.config.storage.extension_root.as_str();
+    extension.transform_urls(&public_base_url, &extension_root);
 
     Ok(extension)
 }
@@ -77,8 +77,8 @@ pub async fn get_user_installed_extensions_service(
     user_uuid: Uuid,
     team_uuid: Option<Uuid>,
 ) -> Result<Vec<InstalledExtensionItem>, String> {
-    let resource_url = svc_ctx.config.minio.resource_url.as_str();
-    let extension_bucket = svc_ctx.config.minio.extension_bucket.as_str();
+    let public_base_url = svc_ctx.config.storage.public_base_url.as_str();
+    let extension_root = svc_ctx.config.storage.extension_root.as_str();
 
     // 查询用户直接安装的扩展
     let user_installed = models::extensions::fetch_user_extensions(&svc_ctx.db, user_uuid)
@@ -105,8 +105,8 @@ pub async fn get_user_installed_extensions_service(
             if let Some(path) = &icon_url {
                 if !path.is_empty() && !path.starts_with("http") {
                     icon_url = Some(get_objects::get_extension_icon_url(
-                        &resource_url,
-                        &extension_bucket,
+                        &public_base_url,
+                        &extension_root,
                         path,
                     ));
                 }
@@ -182,8 +182,8 @@ pub async fn get_user_installed_extensions_service(
             if let Some(path) = &icon_url {
                 if !path.is_empty() && !path.starts_with("http") {
                     icon_url = Some(get_objects::get_extension_icon_url(
-                        &resource_url,
-                        &extension_bucket,
+                        &public_base_url,
+                        &extension_root,
                         path,
                     ));
                 }
@@ -261,8 +261,8 @@ pub async fn get_team_installed_extensions_service(
     team_uuid: Uuid,
     user_uuid: Uuid,
 ) -> Result<Vec<InstalledExtensionItem>, String> {
-    let resource_url = svc_ctx.config.minio.resource_url.as_str();
-    let extension_bucket = svc_ctx.config.minio.extension_bucket.as_str();
+    let public_base_url = svc_ctx.config.storage.public_base_url.as_str();
+    let extension_root = svc_ctx.config.storage.extension_root.as_str();
 
     // 查询团队直接安装的扩展
     let team_installed = models::extensions::fetch_team_extensions(&svc_ctx.db, team_uuid)
@@ -296,8 +296,8 @@ pub async fn get_team_installed_extensions_service(
             if let Some(path) = &icon_url {
                 if !path.is_empty() && !path.starts_with("http") {
                     icon_url = Some(get_objects::get_extension_icon_url(
-                        &resource_url,
-                        &extension_bucket,
+                        &public_base_url,
+                        &extension_root,
                         path,
                     ));
                 }
@@ -381,8 +381,8 @@ pub async fn get_team_installed_extensions_service(
             if let Some(path) = &icon_url {
                 if !path.is_empty() && !path.starts_with("http") {
                     icon_url = Some(get_objects::get_extension_icon_url(
-                        &resource_url,
-                        &extension_bucket,
+                        &public_base_url,
+                        &extension_root,
                         path,
                     ));
                 }
@@ -805,8 +805,8 @@ pub async fn get_environment_extensions_service(
 ) -> Result<Vec<crate::dto::environments::ExtensionSummaryDto>, String> {
     use std::collections::HashMap;
 
-    let resource_url = svc_ctx.config.minio.resource_url.as_str();
-    let extension_bucket = svc_ctx.config.minio.extension_bucket.as_str();
+    let public_base_url = svc_ctx.config.storage.public_base_url.as_str();
+    let extension_root = svc_ctx.config.storage.extension_root.as_str();
 
     // 使用 HashMap 去重，key 为 extension_id
     let mut extension_map: HashMap<String, crate::dto::environments::ExtensionSummaryDto> = HashMap::new();
@@ -835,9 +835,9 @@ pub async fn get_environment_extensions_service(
             let mut icon_url = ext.icon_url.clone();
             if let Some(path) = &icon_url {
                 if !path.is_empty() && !path.starts_with("http") {
-                    icon_url = Some(crate::utils::minios::get_objects::get_extension_icon_url(
-                        resource_url,
-                        extension_bucket,
+                    icon_url = Some(crate::utils::storage::get_objects::get_extension_icon_url(
+                        public_base_url,
+                        extension_root,
                         path,
                     ));
                 }
@@ -846,9 +846,9 @@ pub async fn get_environment_extensions_service(
             let mut download_url = ext.download_url.clone();
             if let Some(path) = &download_url {
                 if !path.is_empty() && !path.starts_with("http") {
-                    download_url = Some(crate::utils::minios::get_objects::get_extension_crx_url(
-                        resource_url,
-                        extension_bucket,
+                    download_url = Some(crate::utils::storage::get_objects::get_extension_crx_url(
+                        public_base_url,
+                        extension_root,
                         path,
                     ));
                 }
@@ -884,9 +884,9 @@ pub async fn get_environment_extensions_service(
             let mut icon_url = ext.icon_url.clone();
             if let Some(path) = &icon_url {
                 if !path.is_empty() && !path.starts_with("http") {
-                    icon_url = Some(crate::utils::minios::get_objects::get_extension_icon_url(
-                        resource_url,
-                        extension_bucket,
+                    icon_url = Some(crate::utils::storage::get_objects::get_extension_icon_url(
+                        public_base_url,
+                        extension_root,
                         path,
                     ));
                 }
@@ -895,9 +895,9 @@ pub async fn get_environment_extensions_service(
             let mut download_url = ext.download_url.clone();
             if let Some(path) = &download_url {
                 if !path.is_empty() && !path.starts_with("http") {
-                    download_url = Some(crate::utils::minios::get_objects::get_extension_crx_url(
-                        resource_url,
-                        extension_bucket,
+                    download_url = Some(crate::utils::storage::get_objects::get_extension_crx_url(
+                        public_base_url,
+                        extension_root,
                         path,
                     ));
                 }
@@ -934,9 +934,9 @@ pub async fn get_environment_extensions_service(
                 let mut icon_url = ext.icon_url.clone();
                 if let Some(path) = &icon_url {
                     if !path.is_empty() && !path.starts_with("http") {
-                        icon_url = Some(crate::utils::minios::get_objects::get_extension_icon_url(
-                            resource_url,
-                            extension_bucket,
+                        icon_url = Some(crate::utils::storage::get_objects::get_extension_icon_url(
+                        public_base_url,
+                        extension_root,
                             path,
                         ));
                     }
@@ -945,9 +945,9 @@ pub async fn get_environment_extensions_service(
                 let mut download_url = ext.download_url.clone();
                 if let Some(path) = &download_url {
                     if !path.is_empty() && !path.starts_with("http") {
-                        download_url = Some(crate::utils::minios::get_objects::get_extension_crx_url(
-                            resource_url,
-                            extension_bucket,
+                        download_url = Some(crate::utils::storage::get_objects::get_extension_crx_url(
+                        public_base_url,
+                        extension_root,
                             path,
                         ));
                     }

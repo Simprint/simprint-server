@@ -24,17 +24,13 @@ pub async fn get_browser_kernel_list_service(
 
     let mut map: HashMap<String, Vec<Version>> = HashMap::new();
 
-    let minio_config = &svc_ctx.config.minio;
-    let (bucket_name, resource_url) = (
-        &minio_config.version_resource_bucket,
-        &minio_config.resource_url,
-    );
+    let storage_config = &svc_ctx.config.storage;
 
     for (type_code, _resource_name, version) in results {
         map.entry(type_code).or_insert_with(Vec::new).push(Version {
             url: Some(get_version_resource_url(
-                resource_url,
-                bucket_name,
+                &storage_config.public_base_url,
+                &storage_config.version_root,
                 &version.url.unwrap_or_default(),
             )),
             ..version

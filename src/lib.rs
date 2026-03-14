@@ -19,28 +19,17 @@ pub async fn init_encrypt_secret(config: &IConfig) {
     utils::init_rsa_secret(key_path).await;
 }
 
-/// 初始化minio
-pub async fn init_minio(config: &IConfig) {
-    let minio_config = &config.clone().minio;
+/// 初始化对象存储
+pub async fn init_storage(config: &IConfig) {
+    let storage_config = &config.clone().storage;
 
-    let client = {
-        utils::init_minio(
-            &minio_config.server_url,
-            &minio_config.access_key,
-            &minio_config.secret_access_key,
-            None,
-            None,
-        )
+    utils::init_storage(
+        &storage_config.endpoint,
+        &storage_config.access_key,
+        &storage_config.secret_access_key,
+        None,
+        None,
+    )
         .await
-        .expect("初始化Minio客户端失败")
-    };
-
-    // 初始化存储桶
-    client
-        .init_bucket(vec![
-            minio_config.avatar_bucket.clone(),
-            minio_config.extension_bucket.clone(),
-        ])
-        .await
-        .expect("初始化Minio桶失败");
+        .expect("初始化对象存储客户端失败");
 }

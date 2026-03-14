@@ -1,7 +1,7 @@
 use std::env;
 
 use axum::{Router, middleware};
-use simprint_server::{init_encrypt_secret, init_minio};
+use simprint_server::{init_encrypt_secret, init_storage};
 use simprint_server::{
     middlewares,
     routes::{
@@ -44,7 +44,7 @@ async fn run_server(config: IConfig) -> Result<(), Box<dyn std::error::Error>> {
 
     // init resources
     init_encrypt_secret(&config).await;
-    init_minio(&config).await;
+    init_storage(&config).await;
 
     let port = &config.app.port;
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))

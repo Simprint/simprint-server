@@ -344,9 +344,9 @@ pub async fn get_current_user_service(
         .avatar_hash
         .as_ref()
         .map(|hash| {
-            crate::utils::minios::get_objects::get_avatar_url(
-                &svc_ctx.config.minio.resource_url,
-                &svc_ctx.config.minio.avatar_bucket,
+            crate::utils::storage::get_objects::get_avatar_url(
+                &svc_ctx.config.storage.public_base_url,
+                &svc_ctx.config.storage.avatar_root,
                 hash,
             )
         });

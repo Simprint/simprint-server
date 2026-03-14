@@ -18,20 +18,17 @@ pub struct RedisConfig {
     pub url: String,
 }
 
-/// MINIO 配置
+/// 对象存储配置
 #[derive(Debug, Clone, Deserialize)]
-pub struct MinioConfig {
-    pub server_url: String,
-    pub resource_url: String,
+pub struct StorageConfig {
+    pub endpoint: String,
+    pub public_base_url: String,
     pub access_key: String,
     pub secret_access_key: String,
-    pub avatar_bucket: String,
-    pub extension_bucket: String,
-    pub version_resource_bucket: String,
-}
-
-fn default_extension_bucket() -> String {
-    "extensions".to_string()
+    pub bucket: String,
+    pub avatar_root: String,
+    pub extension_root: String,
+    pub version_root: String,
 }
 
 /// SMTP 配置
@@ -87,7 +84,7 @@ pub struct IConfig {
     pub app: AppConfig,
     pub database: DatabaseConfig,
     pub redis: RedisConfig,
-    pub minio: MinioConfig,
+    pub storage: StorageConfig,
     pub smtp: Option<SmtpConfig>,
     #[serde(default = "default_workspace_quota_config")]
     pub workspace_quota: WorkspaceQuotaConfig,

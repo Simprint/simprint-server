@@ -4,7 +4,7 @@ use serde::Serialize;
 use sqlx::FromRow;
 use uuid::Uuid;
 
-use crate::utils::minios::get_objects;
+use crate::utils::storage::get_objects;
 
 /// 扩展 DTO
 #[derive(Debug, Clone, FromRow, Serialize)]
@@ -36,17 +36,17 @@ pub struct ExtensionDto {
 impl ExtensionDto {
     /// 将 object path 转换为完整 URL
     ///
-    /// 数据库中存储的是 MinIO object path（如 `ext_id/version/hash.crx`），
+    /// 数据库中存储的是对象存储 object path（如 `ext_id/version/hash.crx`），
     /// 返回给客户端时需要组装为完整 URL。
     ///
     /// 如果 URL 已经是完整的 http(s) 地址，则不进行转换。
-    pub fn transform_urls(&mut self, resource_url: &str, extension_bucket: &str) {
+    pub fn transform_urls(&mut self, public_base_url: &str, extension_root: &str) {
         // 转换图标 URL
         if let Some(path) = &self.icon_url {
             if !path.is_empty() && !path.starts_with("http") {
                 self.icon_url = Some(get_objects::get_extension_icon_url(
-                    resource_url,
-                    extension_bucket,
+                    public_base_url,
+                    extension_root,
                     path,
                 ));
             }
@@ -56,8 +56,8 @@ impl ExtensionDto {
         if let Some(path) = &self.download_url {
             if !path.is_empty() && !path.starts_with("http") {
                 self.download_url = Some(get_objects::get_extension_crx_url(
-                    resource_url,
-                    extension_bucket,
+                    public_base_url,
+                    extension_root,
                     path,
                 ));
             }
@@ -67,11 +67,11 @@ impl ExtensionDto {
     /// 批量转换 ExtensionDto 列表中的 object path 为完整 URL
     pub fn transform_urls_batch(
         extensions: &mut [ExtensionDto],
-        resource_url: &str,
-        extension_bucket: &str,
+        public_base_url: &str,
+        extension_root: &str,
     ) {
         for ext in extensions.iter_mut() {
-            ext.transform_urls(resource_url, extension_bucket);
+            ext.transform_urls(public_base_url, extension_root);
         }
     }
 }
