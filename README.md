@@ -8,6 +8,68 @@ Simprint Server 是 Simprint 桌面应用的后端服务，提供用户认证、
 
 ## 使用示例
 
+### 通过 `build_docker.py` 构建 Docker 部署包
+
+脚本位置：
+
+```bash
+./build_docker.py
+```
+
+脚本会执行这些步骤：
+
+- 编译 `simprint-server`
+- 编译 `console-gateway`
+- 编译 `update-gateway`
+- 将三个二进制文件复制到项目根目录
+- 默认生成一个 `tar.gz` Docker 部署包
+
+在项目根目录执行：
+
+```bash
+python3 build_docker.py
+```
+
+如果你本地使用 `uv`，也可以直接执行：
+
+```bash
+uv run python build_docker.py
+```
+
+常用命令：
+
+```bash
+# 默认 release 构建，并生成 tar.gz 部署包
+python3 build_docker.py
+uv run python build_docker.py
+
+# 构建前清理旧二进制
+python3 build_docker.py --clean
+uv run python build_docker.py --clean
+
+# 只编译并复制二进制，不生成压缩包
+python3 build_docker.py --no-package
+uv run python build_docker.py --no-package
+
+# 生成 zip 格式部署包
+python3 build_docker.py --format zip
+uv run python build_docker.py --format zip
+
+# 使用 dev 模式编译
+python3 build_docker.py --dev --no-package
+uv run python build_docker.py --dev --no-package
+```
+
+构建完成后：
+
+- 二进制文件会出现在当前项目根目录：
+  - `./simprint-server`
+  - `./console-gateway`
+  - `./update-gateway`
+- 如果未使用 `--no-package`，还会在项目根目录生成：
+  - `simprint-server-docker-*.tar.gz`
+  - 或 `simprint-server-docker-*.zip`
+
 ### 启动服务
 
 服务需要通过配置文件启动，配置文件路径通过命令行参数指定：

@@ -1,8 +1,7 @@
 version: '3.8'
 
 services:
-  # 客户端网关服务
-  client-gateway:
+  simprint-server:
     build:
       context: .
       dockerfile: Dockerfile
@@ -21,46 +20,6 @@ services:
     networks:
       - simprint-network
 
-  # 控制台网关服务
-  console-gateway:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        BINARY_NAME: console-gateway
-    container_name: simprint-console-gateway
-    command: ["-f=/app/configs/config.console-gateway.prod.toml"]
-    ports:
-      - "40043:40043"
-    volumes:
-      - ./configs:/app/configs:ro
-      - ./assets:/app/assets:ro
-    environment:
-      - RUST_LOG=info
-    restart: unless-stopped
-    networks:
-      - simprint-network
-
-  # 更新网关服务
-  update-gateway:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        BINARY_NAME: update-gateway
-    container_name: simprint-update-gateway
-    command: ["-f=/app/configs/config.update-gateway.prod.toml"]
-    ports:
-      - "40042:40042"
-    volumes:
-      - ./configs:/app/configs:ro
-      - ./assets:/app/assets:ro
-    environment:
-      - RUST_LOG=info
-    restart: unless-stopped
-    networks:
-      - simprint-network
-
 networks:
   simprint-network:
-    driver: bridge
+    external: true

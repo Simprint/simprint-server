@@ -1,5 +1,5 @@
 # 运行时镜像
-FROM debian:bookworm-slim
+FROM debian:bullseye-slim
 
 # 临时禁用 APT 的 GPG 验证以解决密钥环问题
 # 安装运行时依赖（这些包来自官方 Debian 仓库）
@@ -8,7 +8,7 @@ RUN echo 'Acquire::AllowInsecureRepositories "true";' > /etc/apt/apt.conf.d/99al
     && apt-get update --allow-releaseinfo-change \
     && apt-get install -y --no-install-recommends \
     ca-certificates \
-    libssl3 \
+    libssl1.1 \
     && rm -f /etc/apt/apt.conf.d/99allow-insecure \
     && rm -rf /var/lib/apt/lists/*
 

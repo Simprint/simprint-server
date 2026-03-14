@@ -21,11 +21,9 @@ import tarfile
 from pathlib import Path
 from datetime import datetime
 
-# 需要编译的服务列表
+# 需要编译的服务列表（本仓库仅 simprint-server）
 SERVICES = [
     "simprint-server",
-    "console-gateway",
-    "update-gateway",
 ]
 
 # 项目根目录
@@ -229,11 +227,11 @@ def prepare_package_directory() -> Path:
     # 创建 README 文件
     readme_content = f"""# Simprint Server Docker 部署包
 
-本压缩包包含运行 Simprint Server 容器所需的所有文件。
+本压缩包包含运行 Simprint Server（客户端网关）容器所需的所有文件。
 
 ## 包含内容
 
-- 三个服务的二进制文件: {', '.join(SERVICES)}
+- 二进制文件: {', '.join(SERVICES)}
 - Dockerfile: Docker 镜像构建文件
 - docker-compose.yml: Docker Compose 配置文件
 - configs/: 配置文件目录
@@ -243,14 +241,14 @@ def prepare_package_directory() -> Path:
 
 1. 解压压缩包到目标目录
 
-2. 确保配置文件中的数据库、Redis、MinIO 地址正确
+2. 确保配置文件中的数据库、Redis、对象存储地址正确
 
 3. 构建 Docker 镜像:
    ```bash
    docker-compose build
    ```
 
-4. 启动所有服务:
+4. 启动服务:
    ```bash
    docker-compose up -d
    ```
@@ -262,14 +260,12 @@ def prepare_package_directory() -> Path:
 
 6. 查看日志:
    ```bash
-   docker-compose logs -f
+   docker-compose logs -f simprint-server
    ```
 
 ## 服务端口
 
-- 客户端网关 (client-gateway): 40041
-- 更新网关 (update-gateway): 40042
-- 控制台网关 (console-gateway): 40043
+- 客户端网关 (simprint-server): 40041
 
 ## 注意事项
 
@@ -344,7 +340,7 @@ def main():
             build_success = False
     
     if not build_success:
-        print("\n✗ 部分服务编译失败，请检查错误信息")
+        print("\n✗ 服务编译失败，请检查错误信息")
         sys.exit(1)
     
     # 复制二进制文件
@@ -355,7 +351,7 @@ def main():
             copy_success = False
     
     if not copy_success:
-        print("\n✗ 部分文件复制失败")
+        print("\n✗ 文件复制失败")
         sys.exit(1)
     
     # 验证文件
@@ -394,7 +390,7 @@ def main():
         print_step("构建完成！")
         print("\n现在可以使用以下命令构建 Docker 镜像：")
         print("  docker-compose build")
-        print("\n或者启动所有服务：")
+        print("\n或者启动服务：")
         print("  docker-compose up -d")
 
 
