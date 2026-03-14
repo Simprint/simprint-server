@@ -15,7 +15,7 @@ route_whitelists = [
     "GET+/api/v1/time/now",
     "POST+/api/v1/versions/check"
 ]
-referral_link_prefix = "https://www.simprint.cc/download"
+referral_link_prefix = "https://www.simprint.app/download"
 
 
 [database]

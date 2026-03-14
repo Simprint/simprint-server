@@ -13,7 +13,7 @@ route_whitelists = [
     "POST+/api/v2/users/refresh-credentials",
     "GET+/api/v2/secret/public/key"
 ]
-referral_link_prefix = "https://www.simprint.cc/download"
+referral_link_prefix = "https://www.simprint.app/download"
 
 
 [database]
