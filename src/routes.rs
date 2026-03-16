@@ -5,6 +5,7 @@ pub mod users;
 
 // 新增模块
 pub mod accounts;
+pub mod local_api;
 pub mod audit;
 pub mod billing;
 pub mod browser_kernel;

@@ -2,7 +2,7 @@ use rust_decimal::Decimal;
 use sqlx::{Error, Pool, Postgres};
 use uuid::Uuid;
 
-use crate::dto::{UserDto, UserInfoDto};
+use crate::dto::{LocalApiPermissionDefinitionDto, UserDto, UserInfoDto};
 use crate::entitys::{RegisterRequest, UpdateUserRequest};
 
 /// 插入用户基础信息
@@ -58,6 +58,8 @@ pub async fn create_user_with_info(
     // 为用户初始化推广链接时，需要读取所有推广层级配置。
     // 这里复用 referral 模块中已经定义好的 DTO / 查询函数，避免在 models 中新增本地 struct 类型。
     let tiers = crate::models::referral::fetch_referral_tiers(pool).await?;
+    let local_api_permission_definitions =
+        crate::models::local_api::fetch_permission_definitions(pool).await?;
 
     let mut tx = pool.begin().await?;
 
@@ -105,7 +107,44 @@ pub async fn create_user_with_info(
     .execute(&mut *tx)
     .await?;
 
-    // 6. 初始化推广积分
+    // 6. 初始化本地 API 配置
+    sqlx::query(
+        r#"
+        INSERT INTO user_local_api_settings (user_uuid, enabled, port, remote_access, cors_origins)
+        VALUES ($1, FALSE, 8080, FALSE, '[]'::jsonb);
+        "#,
+    )
+    .bind(user_uuid)
+    .execute(&mut *tx)
+    .await?;
+
+    // 7. 初始化本地 API 密钥
+    let local_api_key = generate_local_api_key();
+    let local_api_key_hash = crate::models::local_api::hash_api_key(&local_api_key);
+    let local_api_key_prefix = local_api_key.chars().take(16).collect::<String>();
+    let local_api_key_id: i32 = sqlx::query_scalar(
+        r#"
+        INSERT INTO user_local_api_keys (user_uuid, key_prefix, key_hash, api_key, daily_limit)
+        VALUES ($1, $2, $3, $4, 1000)
+        RETURNING id;
+        "#,
+    )
+    .bind(user_uuid)
+    .bind(&local_api_key_prefix)
+    .bind(&local_api_key_hash)
+    .bind(&local_api_key)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    // 8. 初始化本地 API 权限记录
+    insert_local_api_permissions(
+        &mut tx,
+        local_api_key_id,
+        &local_api_permission_definitions,
+    )
+    .await?;
+
+    // 9. 初始化推广积分
     sqlx::query(
         r#"
         INSERT INTO user_referral_points (user_uuid, total_points, available_points, used_points, pending_points)
@@ -116,7 +155,7 @@ pub async fn create_user_with_info(
     .execute(&mut *tx)
     .await?;
 
-    // 7. 创建推广链接（根据层级配置创建最多 4 个链接）
+    // 10. 创建推广链接（根据层级配置创建最多 4 个链接）
     //
     // 规则：
     // - 始终为用户预创建所有层级对应的推广链接（默认最多 4 个）
@@ -169,7 +208,7 @@ pub async fn create_user_with_info(
         .await?;
     }
 
-    // 8. 处理推荐人关系（如果有邀请码）
+    // 11. 处理推荐人关系（如果有邀请码）
     if let Some(ref referrer_code) = payload.referral_code {
         // 查找推荐人
         let referrer: Option<(Uuid, Uuid)> = sqlx::query_as(
@@ -207,7 +246,7 @@ pub async fn create_user_with_info(
         }
     }
 
-    // 9. 创建个人团队（每个用户都应该有一个团队）
+    // 12. 创建个人团队（每个用户都应该有一个团队）
     // 团队名称使用用户昵称，如果没有昵称则使用邮箱前缀
     let team_name =
         payload.nickname.as_ref().map(|n| format!("{} 的团队", n)).unwrap_or_else(|| {
@@ -217,7 +256,7 @@ pub async fn create_user_with_info(
             )
         });
 
-    // 9. 创建个人工作空间
+    // 13. 创建个人工作空间
     let workspace_name = format!(
         "{} 的工作空间",
         payload.nickname.as_deref().unwrap_or("用户")
@@ -234,7 +273,7 @@ pub async fn create_user_with_info(
     .fetch_one(&mut *tx)
     .await?;
 
-    // 10. 创建工作空间配额（使用传入的配额配置）
+    // 14. 创建工作空间配额（使用传入的配额配置）
     sqlx::query(
         r#"
         INSERT INTO workspace_quotas (workspace_uuid, max_environments, max_team_members, max_proxies, max_rpa_tasks)
@@ -249,7 +288,7 @@ pub async fn create_user_with_info(
     .execute(&mut *tx)
     .await?;
 
-    // 11. 创建个人团队（每个用户自动创建一个团队）
+    // 15. 创建个人团队（每个用户自动创建一个团队）
     let team_uuid: Uuid = sqlx::query_scalar(
         r#"
         INSERT INTO teams (workspace_uuid, name, description, owner_uuid)
@@ -264,7 +303,7 @@ pub async fn create_user_with_info(
     .fetch_one(&mut *tx)
     .await?;
 
-    // 12. 添加用户为团队成员（owner 角色）
+    // 16. 添加用户为团队成员（owner 角色）
     sqlx::query(
         r#"
         INSERT INTO team_members (team_uuid, workspace_uuid, user_uuid, role, status)
@@ -277,7 +316,7 @@ pub async fn create_user_with_info(
     .execute(&mut *tx)
     .await?;
 
-    // 13. 设置为用户当前团队和工作空间
+    // 17. 设置为用户当前团队和工作空间
     sqlx::query(
         r#"
         UPDATE user_infos SET current_team_uuid = $1, current_workspace_uuid = $2 WHERE user_uuid = $3;
@@ -293,6 +332,39 @@ pub async fn create_user_with_info(
 
     Ok(user_uuid)
 }
+
+async fn insert_local_api_permissions(
+    tx: &mut sqlx::Transaction<'_, Postgres>,
+    api_key_id: i32,
+    definitions: &[LocalApiPermissionDefinitionDto],
+) -> Result<(), Error> {
+    for definition in definitions {
+        sqlx::query(
+            r#"
+            INSERT INTO user_local_api_key_permissions (
+                api_key_id, permission_code, is_enabled, rate_limit_per_minute, rate_limit_per_hour
+            )
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (api_key_id, permission_code) DO NOTHING;
+            "#,
+        )
+        .bind(api_key_id)
+        .bind(definition.permission_code.as_str())
+        .bind(definition.default_enabled)
+        .bind(definition.default_rate_limit_per_minute)
+        .bind(definition.default_rate_limit_per_hour)
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    Ok(())
+}
+
+fn generate_local_api_key() -> String {
+    let raw = Uuid::new_v4().simple().to_string();
+    format!("sk_local_{}", raw)
+}
+
 
 /// 根据 UUID 查询用户
 pub async fn fetch_user_by_uuid(

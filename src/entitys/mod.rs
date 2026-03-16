@@ -11,6 +11,7 @@ pub mod versions;
 
 // 新增模块
 pub mod accounts;
+pub mod local_api;
 pub mod audit;
 pub mod billing;
 pub mod browser_kernel;
@@ -44,6 +45,7 @@ pub use versions::*;
 
 // 新增导出
 pub use accounts::*;
+pub use local_api::*;
 pub use audit::*;
 pub use billing::*;
 pub use browser_kernel::*;

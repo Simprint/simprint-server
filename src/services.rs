@@ -12,6 +12,7 @@ mod versions;
 
 // 新增模块
 pub mod accounts;
+pub mod local_api;
 pub mod audit;
 pub mod browser_kernel;
 pub mod billing;
