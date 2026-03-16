@@ -11,7 +11,6 @@ pub mod versions;
 
 // 新增模块
 pub mod accounts;
-pub mod api;
 pub mod audit;
 pub mod billing;
 pub mod environments;
@@ -26,10 +25,6 @@ pub mod rpa;
 pub mod teams;
 pub mod workspace_quotas;
 pub mod workspaces;
-
-// Console Gateway 模块
-pub mod admin;
-pub mod apikey;
 
 pub use gray_releases::*;
 pub use gray_resources::*;

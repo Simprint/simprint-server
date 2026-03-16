@@ -11,13 +11,10 @@ pub mod versions;
 
 // 新增模块
 pub mod accounts;
-pub mod api_service;
 pub mod audit;
 pub mod billing;
 pub mod browser_kernel;
 pub mod common;
-pub mod console_admin;
-pub mod console_apikey;
 pub mod environments;
 pub mod extensions;
 pub mod group_member_permissions;
@@ -47,13 +44,10 @@ pub use versions::*;
 
 // 新增导出
 pub use accounts::*;
-pub use api_service::*;
 pub use audit::*;
 pub use billing::*;
 pub use browser_kernel::*;
 pub use common::*;
-pub use console_admin::*;
-pub use console_apikey::*;
 pub use environments::*;
 pub use extensions::*;
 pub use group_member_permissions::*;
