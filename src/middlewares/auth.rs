@@ -30,6 +30,21 @@ pub async fn auth(
         return Ok(next.run(req).await);
     }
 
+    if req
+        .extensions()
+        .get::<RequestContext>()
+        .and_then(|ctx| ctx.current_user.as_ref())
+        .is_some()
+    {
+        return Ok(next.run(req).await);
+    }
+
+    if crate::middlewares::has_local_api_auth_headers(&req)
+        && !extract_resource_path(&resource_path).starts_with("/local-api")
+    {
+        return Ok(next.run(req).await);
+    }
+
     // 判断请求的是否在白名单，如果是白名单就直接允许访问。
     {
         let combine = format!("{}+{}", resource_method, resource_path);
@@ -70,33 +85,46 @@ pub async fn auth(
         return Err(StatusCode::UNAUTHORIZED);
     };
 
-    // 更新 RequestContext 中的 current_user、current_workspace 和 current_team
+    fill_authenticated_request_context(&state, &mut req, uuid, &resource_method, &resource_path)
+        .await;
+
+    Ok(next.run(req).await)
+}
+
+pub async fn fill_authenticated_request_context(
+    state: &SvcCtx,
+    req: &mut Request,
+    user_uuid: Uuid,
+    resource_method: &str,
+    resource_path: &str,
+) {
+    if req.extensions().get::<RequestContext>().is_none() {
+        req.extensions_mut().insert(RequestContext::default());
+    }
+
     if let Some(ctx) = req.extensions_mut().get_mut::<RequestContext>() {
-        let ip = ctx.ip_or_unknown();
-        tracing::info!("auth user uuid: {}, ip: {}", uuid, ip);
+        let ip = ctx.ip_or_unknown().to_string();
+        tracing::info!("auth user uuid: {}, ip: {}", user_uuid, ip);
 
-        ctx.current_user = Some(CurrentUser { user_uuid: uuid });
+        ctx.current_user = Some(CurrentUser { user_uuid });
+        ctx.current_team_uuid = None;
+        ctx.current_workspace_uuid = None;
 
-        // 设置资源标识符（method+业务路径）
-        let business_path = extract_resource_path(&resource_path);
+        let business_path = extract_resource_path(resource_path);
         ctx.resource_identifier = Some(format!("{}+{}", resource_method, business_path));
+    }
 
-        // 获取用户信息（包含 current_workspace_uuid 和 current_team_uuid）
-        let user_info = crate::models::user::fetch_user_info_by_uuid(&state.db, uuid)
-            .await
-            .ok()
-            .flatten();
+    let user_info = crate::models::user::fetch_user_info_by_uuid(&state.db, user_uuid)
+        .await
+        .ok()
+        .flatten();
 
-        // 初始化 current_team_uuid 和 current_workspace_uuid
+    if let Some(ctx) = req.extensions_mut().get_mut::<RequestContext>() {
         if let Some(user_info) = user_info {
             ctx.current_team_uuid = user_info.current_team_uuid;
-
-            // 优先使用 current_workspace_uuid
-            // 如果不存在，尝试从当前团队获取工作空间
             ctx.current_workspace_uuid = if let Some(ws_uuid) = user_info.current_workspace_uuid {
                 Some(ws_uuid)
             } else if let Some(team_uuid) = user_info.current_team_uuid {
-                // 从当前团队获取工作空间
                 crate::models::teams::fetch_team_by_uuid(&state.db, team_uuid)
                     .await
                     .ok()
@@ -107,6 +135,4 @@ pub async fn auth(
             };
         }
     }
-
-    Ok(next.run(req).await)
 }

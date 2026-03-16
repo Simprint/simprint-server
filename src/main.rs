@@ -106,6 +106,10 @@ fn register_middlewares(svc_ctx: &SvcCtx, app: Router<SvcCtx>) -> Router<SvcCtx>
     ))
     .route_layer(middleware::from_fn_with_state(
         svc_ctx.clone(),
+        middlewares::local_api_auth,
+    ))
+    .route_layer(middleware::from_fn_with_state(
+        svc_ctx.clone(),
         middlewares::machine_auth,
     ))
     .route_layer(middleware::from_fn_with_state(

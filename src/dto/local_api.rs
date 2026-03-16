@@ -1,5 +1,5 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::FromRow;
 use uuid::Uuid;
@@ -51,7 +51,7 @@ pub struct LocalApiKeyPermissionDto {
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, FromRow)]
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct LocalApiPermissionDefinitionDto {
     pub id: i32,
     pub uuid: Uuid,

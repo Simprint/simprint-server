@@ -3,6 +3,7 @@ mod cors;
 mod decrypt;
 mod encrypt;
 mod logger;
+mod local_api_auth;
 mod machine_auth;
 mod real_ip;
 
@@ -11,6 +12,7 @@ pub use cors::*;
 pub use decrypt::*;
 pub use encrypt::*;
 pub use logger::*;
+pub use local_api_auth::*;
 pub use machine_auth::*;
 pub use real_ip::*;
 
