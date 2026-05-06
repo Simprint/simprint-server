@@ -1,21 +1,19 @@
 mod config;
-pub mod encryption;
 mod extractor;
 pub mod gray_checker;
 mod jwt;
-pub mod storage;
 mod password;
 mod responses;
 mod secret;
+pub mod storage;
 
 pub use config::*;
-pub use encryption::*;
 pub use extractor::*;
 pub use jwt::*;
-pub use storage::*;
 pub use password::*;
 pub use responses::*;
 pub use secret::*;
+pub use storage::*;
 
 /// 向指定邮箱发送验证码
 pub fn send_email(

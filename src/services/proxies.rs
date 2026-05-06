@@ -6,7 +6,6 @@ use crate::entitys::{
 };
 use crate::models;
 use crate::svc_ctx::SvcCtx;
-use crate::utils::encryption::{encrypt_password, get_encryption_key};
 
 /// 创建代理
 pub async fn create_proxy_service(
@@ -23,15 +22,7 @@ pub async fn create_proxy_service(
         return Err("工作空间代理配额不足，无法创建新代理".to_string());
     }
 
-    // 2. 加密密码
-    let password_encrypted = if let Some(password) = &payload.password {
-        let key = get_encryption_key();
-        Some(encrypt_password(password, &key)?)
-    } else {
-        None
-    };
-
-    // 3. 创建代理
+    // 2. 创建代理
     let proxy_uuid = models::insert_proxy(
         &svc_ctx.db,
         workspace_uuid,
@@ -41,14 +32,14 @@ pub async fn create_proxy_service(
         payload.port,
         &payload.proxy_type,
         payload.username.as_deref(),
-        password_encrypted.as_deref(),
+        payload.password.as_deref(),
         payload.country.as_deref(),
         payload.city.as_deref(),
     )
     .await
     .map_err(|e| e.to_string())?;
 
-    // 4. 更新工作空间配额（创建后增加使用数）
+    // 3. 更新工作空间配额（创建后增加使用数）
     models::increment_used_proxies(&svc_ctx.db, workspace_uuid, 1)
         .await
         .map_err(|e| format!("更新配额失败: {}", e))?;
@@ -130,14 +121,6 @@ pub async fn update_proxy_service(
     svc_ctx: &SvcCtx,
     payload: &UpdateProxyRequest,
 ) -> Result<(), String> {
-    // 加密密码
-    let password_encrypted = if let Some(password) = &payload.password {
-        let key = get_encryption_key();
-        Some(encrypt_password(password, &key)?)
-    } else {
-        None
-    };
-
     models::update_proxy(
         &svc_ctx.db,
         payload.uuid,
@@ -146,7 +129,7 @@ pub async fn update_proxy_service(
         payload.port,
         payload.proxy_type.as_deref(),
         payload.username.as_deref(),
-        password_encrypted.as_deref(),
+        payload.password.as_deref(),
         payload.country.as_deref(),
         payload.city.as_deref(),
     )
@@ -211,23 +194,7 @@ pub async fn batch_import_proxies_service(
     let mut success_count = 0;
     let mut failed_count = 0;
     let mut errors: Vec<String> = vec![];
-    let key = get_encryption_key();
-
     for (index, proxy) in payload.proxies.iter().enumerate() {
-        // 加密密码
-        let password_encrypted = if let Some(pwd) = &proxy.password {
-            match encrypt_password(pwd, &key) {
-                Ok(encrypted) => Some(encrypted),
-                Err(e) => {
-                    failed_count += 1;
-                    errors.push(format!("第 {} 项密码加密失败: {}", index + 1, e));
-                    continue;
-                }
-            }
-        } else {
-            None
-        };
-
         let result = models::insert_proxy(
             &svc_ctx.db,
             workspace_uuid,
@@ -237,7 +204,7 @@ pub async fn batch_import_proxies_service(
             proxy.port,
             &proxy.proxy_type,
             proxy.username.as_deref(),
-            password_encrypted.as_deref(),
+            proxy.password.as_deref(),
             proxy.country.as_deref(),
             proxy.city.as_deref(),
         )

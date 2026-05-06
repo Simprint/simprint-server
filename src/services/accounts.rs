@@ -6,7 +6,6 @@ use crate::entitys::{
 };
 use crate::models;
 use crate::svc_ctx::SvcCtx;
-use crate::utils::encryption::{encrypt_password, get_encryption_key};
 
 /// 创建账号
 pub async fn create_account_service(
@@ -15,14 +14,6 @@ pub async fn create_account_service(
     team_uuid: Option<Uuid>,
     payload: &CreateAccountRequest,
 ) -> Result<Uuid, String> {
-    // 加密密码
-    let password_encrypted = if let Some(password) = &payload.password {
-        let key = get_encryption_key();
-        Some(encrypt_password(password, &key)?)
-    } else {
-        None
-    };
-
     models::insert_platform_account(
         &svc_ctx.db,
         user_uuid,
@@ -30,7 +21,7 @@ pub async fn create_account_service(
         &payload.platform_url,
         payload.platform_name.as_deref(),
         &payload.account,
-        password_encrypted.as_deref(),
+        payload.password.as_deref(),
         payload.remark.as_deref(),
     )
     .await
@@ -110,21 +101,13 @@ pub async fn update_account_service(
     svc_ctx: &SvcCtx,
     payload: &UpdateAccountRequest,
 ) -> Result<(), String> {
-    // 加密密码
-    let password_encrypted = if let Some(password) = &payload.password {
-        let key = get_encryption_key();
-        Some(encrypt_password(password, &key)?)
-    } else {
-        None
-    };
-
     models::update_platform_account(
         &svc_ctx.db,
         payload.uuid,
         payload.platform_url.as_deref(),
         payload.platform_name.as_deref(),
         payload.account.as_deref(),
-        password_encrypted.as_deref(),
+        payload.password.as_deref(),
         payload.remark.as_deref(),
         payload.status.as_deref(),
     )
@@ -197,23 +180,7 @@ pub async fn batch_import_accounts_service(
     let mut success_count = 0;
     let mut failed_count = 0;
     let mut errors: Vec<String> = vec![];
-    let key = get_encryption_key();
-
     for (index, account) in payload.accounts.iter().enumerate() {
-        // 加密密码
-        let password_encrypted = if let Some(pwd) = &account.password {
-            match encrypt_password(pwd, &key) {
-                Ok(encrypted) => Some(encrypted),
-                Err(e) => {
-                    failed_count += 1;
-                    errors.push(format!("第 {} 项密码加密失败: {}", index + 1, e));
-                    continue;
-                }
-            }
-        } else {
-            None
-        };
-
         let result = models::insert_platform_account(
             &svc_ctx.db,
             user_uuid,
@@ -221,7 +188,7 @@ pub async fn batch_import_accounts_service(
             &account.platform_url,
             account.platform_name.as_deref(),
             &account.account,
-            password_encrypted.as_deref(),
+            account.password.as_deref(),
             account.remark.as_deref(),
         )
         .await;

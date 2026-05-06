@@ -26,10 +26,11 @@ pub async fn create_environment_service(
     payload: &CreateEnvironmentRequest,
 ) -> Result<Uuid, String> {
     // 1. 检查用户是否在当前工作空间的团队中（工作空间级别）
-    let team_member = models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "您不是该团队的成员".to_string())?;
+    let team_member =
+        models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "您不是该团队的成员".to_string())?;
 
     // 2. 权限检查
     if let Some(group_uuid) = payload.group_uuid {
@@ -236,10 +237,11 @@ pub async fn get_environments_service(
     payload: &ListEnvironmentsRequest,
 ) -> Result<(Vec<crate::entitys::EnvironmentDetailResponse>, i64), String> {
     // 1. 检查用户是否在当前工作空间的团队中
-    let team_member = models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "您不是该团队的成员".to_string())?;
+    let team_member =
+        models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "您不是该团队的成员".to_string())?;
 
     let offset = (payload.pagination.page - 1) * payload.pagination.page_size;
 
@@ -397,7 +399,8 @@ pub async fn get_environments_service(
     }
 
     // 批量查询扩展（为每个环境动态合并插件）
-    let mut extensions_map: HashMap<Uuid, Vec<crate::dto::environments::ExtensionSummaryDto>> = HashMap::new();
+    let mut extensions_map: HashMap<Uuid, Vec<crate::dto::environments::ExtensionSummaryDto>> =
+        HashMap::new();
     for row in &filtered_env_rows {
         let extensions = crate::services::extensions::get_environment_extensions_service(
             &svc_ctx,
@@ -456,7 +459,7 @@ pub async fn get_environments_service(
                     port: p.port,
                     proxy_type: p.proxy_type.clone(),
                     username: p.username.clone(),
-                    password_encrypted: p.password_encrypted.clone(),
+                    password: p.password.clone(),
                     country: p.country.clone(),
                     city: p.city.clone(),
                     status: p.status.clone(),
@@ -492,10 +495,11 @@ pub async fn get_environment_service(
     env_uuid: Uuid,
 ) -> Result<EnvironmentDto, String> {
     // 1. 检查用户是否在当前工作空间的团队中
-    let _team_member = models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "您不是该团队的成员".to_string())?;
+    let _team_member =
+        models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "您不是该团队的成员".to_string())?;
 
     // 2. 查询环境（带工作空间过滤）
     let environment = models::fetch_environment_by_uuid(&svc_ctx.db, workspace_uuid, env_uuid)
@@ -643,7 +647,7 @@ pub async fn get_proxy_summary_service(
         port: proxy.port,
         proxy_type: proxy.proxy_type,
         username: proxy.username,
-        password_encrypted: proxy.password_encrypted,
+        password: proxy.password,
         country: proxy.country,
         city: proxy.city,
         status: proxy.status,
@@ -661,10 +665,11 @@ pub async fn update_environment_service(
     payload: &UpdateEnvironmentRequest,
 ) -> Result<(), String> {
     // 1. 检查用户是否在当前工作空间的团队中
-    let team_member = models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "您不是该团队的成员".to_string())?;
+    let team_member =
+        models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "您不是该团队的成员".to_string())?;
 
     // 2. 查询环境（带工作空间过滤）
     let environment = models::fetch_environment_by_uuid(&svc_ctx.db, workspace_uuid, payload.uuid)
@@ -842,10 +847,11 @@ pub async fn delete_environment_service(
     env_uuid: Uuid,
 ) -> Result<(), String> {
     // 1. 检查用户是否在当前工作空间的团队中
-    let team_member = models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "您不是该团队的成员".to_string())?;
+    let team_member =
+        models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "您不是该团队的成员".to_string())?;
 
     // 2. 查询环境（带工作空间过滤）
     let environment = models::fetch_environment_by_uuid(&svc_ctx.db, workspace_uuid, env_uuid)
@@ -968,13 +974,18 @@ pub async fn get_recycle_bin_environments_service(
     };
     let group_map: HashMap<Uuid, GroupSummaryDto> = group_rows
         .into_iter()
-        .map(|g| (g.uuid, GroupSummaryDto {
-            id: g.id,
-            uuid: g.uuid,
-            name: g.name,
-            description: g.description,
-            sort_order: g.sort_order,
-        }))
+        .map(|g| {
+            (
+                g.uuid,
+                GroupSummaryDto {
+                    id: g.id,
+                    uuid: g.uuid,
+                    name: g.name,
+                    description: g.description,
+                    sort_order: g.sort_order,
+                },
+            )
+        })
         .collect();
 
     // 7. 批量查询代理信息
@@ -987,21 +998,26 @@ pub async fn get_recycle_bin_environments_service(
     };
     let proxy_map: HashMap<Uuid, ProxySummaryDto> = proxy_rows
         .into_iter()
-        .map(|p| (p.uuid, ProxySummaryDto {
-            id: p.id,
-            uuid: p.uuid,
-            name: p.name,
-            host: p.host,
-            port: p.port,
-            proxy_type: p.proxy_type,
-            username: p.username,
-            password_encrypted: p.password_encrypted,
-            country: p.country,
-            city: p.city,
-            status: p.status,
-            latency: p.latency,
-            last_check_ip: p.last_check_ip,
-        }))
+        .map(|p| {
+            (
+                p.uuid,
+                ProxySummaryDto {
+                    id: p.id,
+                    uuid: p.uuid,
+                    name: p.name,
+                    host: p.host,
+                    port: p.port,
+                    proxy_type: p.proxy_type,
+                    username: p.username,
+                    password: p.password,
+                    country: p.country,
+                    city: p.city,
+                    status: p.status,
+                    latency: p.latency,
+                    last_check_ip: p.last_check_ip,
+                },
+            )
+        })
         .collect();
 
     // 8. 批量查询标签信息
@@ -1083,10 +1099,7 @@ pub async fn get_recycle_bin_environments_service(
 }
 
 /// 恢复环境
-pub async fn restore_environment_service(
-    svc_ctx: &SvcCtx,
-    env_uuid: Uuid,
-) -> Result<(), String> {
+pub async fn restore_environment_service(svc_ctx: &SvcCtx, env_uuid: Uuid) -> Result<(), String> {
     models::restore_environment(&svc_ctx.db, env_uuid)
         .await
         .map_err(|e| e.to_string())

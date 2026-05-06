@@ -13,7 +13,7 @@ pub struct PlatformAccountDto {
     pub platform_url: String,
     pub platform_name: Option<String>,
     pub account: String,
-    pub password_encrypted: Option<String>,
+    pub password: Option<String>,
     pub status: String,
     pub remark: Option<String>,
     pub usage_count: Option<i32>,

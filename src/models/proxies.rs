@@ -13,14 +13,14 @@ pub async fn insert_proxy(
     port: i32,
     proxy_type: &str,
     username: Option<&str>,
-    password_encrypted: Option<&str>,
+    password: Option<&str>,
     country: Option<&str>,
     city: Option<&str>,
 ) -> Result<Uuid, Error> {
     let uuid: Uuid = sqlx::query_scalar(
         r#"
         INSERT INTO proxies (workspace_uuid, owner_uuid, name, host, port, proxy_type,
-                              username, password_encrypted, country, city)
+                              username, password, country, city)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING uuid;
         "#,
@@ -32,7 +32,7 @@ pub async fn insert_proxy(
     .bind(port)
     .bind(proxy_type)
     .bind(username)
-    .bind(password_encrypted)
+    .bind(password)
     .bind(country)
     .bind(city)
     .fetch_one(pool)
@@ -53,7 +53,7 @@ pub async fn fetch_proxies(
     let recs = sqlx::query_as::<_, ProxyDto>(
         r#"
         SELECT p.id, p.uuid, p.workspace_uuid, p.owner_uuid, p.name, p.host, p.port, p.proxy_type,
-               p.username, p.password_encrypted, p.ssh_key_encrypted, p.ssh_passphrase_encrypted,
+               p.username, p.password, p.ssh_key_encrypted, p.ssh_passphrase_encrypted,
                p.country, p.city, p.status, p.latency, p.last_check_ip, p.last_checked_at,
                (SELECT COUNT(*) FROM environments e WHERE e.proxy_uuid = p.uuid AND e.deleted_at IS NULL) AS environments_count,
                p.created_at, p.updated_at, p.deleted_at
@@ -110,7 +110,7 @@ pub async fn fetch_proxy_by_uuid(
     let rec = sqlx::query_as::<_, ProxyDto>(
         r#"
         SELECT p.id, p.uuid, p.workspace_uuid, p.owner_uuid, p.name, p.host, p.port, p.proxy_type,
-               p.username, p.password_encrypted, p.ssh_key_encrypted, p.ssh_passphrase_encrypted,
+               p.username, p.password, p.ssh_key_encrypted, p.ssh_passphrase_encrypted,
                p.country, p.city, p.status, p.latency, p.last_check_ip, p.last_checked_at,
                (SELECT COUNT(*) FROM environments e WHERE e.proxy_uuid = p.uuid AND e.deleted_at IS NULL) AS environments_count,
                p.created_at, p.updated_at, p.deleted_at
@@ -134,7 +134,7 @@ pub async fn update_proxy(
     port: Option<i32>,
     proxy_type: Option<&str>,
     username: Option<&str>,
-    password_encrypted: Option<&str>,
+    password: Option<&str>,
     country: Option<&str>,
     city: Option<&str>,
 ) -> Result<(), Error> {
@@ -146,7 +146,7 @@ pub async fn update_proxy(
             port = COALESCE($3, port),
             proxy_type = COALESCE($4, proxy_type),
             username = COALESCE($5, username),
-            password_encrypted = COALESCE($6, password_encrypted),
+            password = COALESCE($6, password),
             country = COALESCE($7, country),
             city = COALESCE($8, city)
         WHERE uuid = $9 AND deleted_at IS NULL
@@ -157,7 +157,7 @@ pub async fn update_proxy(
     .bind(port)
     .bind(proxy_type)
     .bind(username)
-    .bind(password_encrypted)
+    .bind(password)
     .bind(country)
     .bind(city)
     .bind(proxy_uuid)

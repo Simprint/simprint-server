@@ -75,7 +75,7 @@ pub async fn fetch_visible_proxies_by_team(
     let recs = sqlx::query_as::<_, ProxyDto>(
         r#"
         SELECT p.id, p.uuid, p.workspace_uuid, p.owner_uuid, p.name, p.host, p.port, p.proxy_type,
-               p.username, p.password_encrypted, p.ssh_key_encrypted, p.ssh_passphrase_encrypted,
+               p.username, p.password, p.ssh_key_encrypted, p.ssh_passphrase_encrypted,
                p.country, p.city, p.status, p.latency, p.last_check_ip, p.last_checked_at,
                (SELECT COUNT(*) FROM environments e WHERE e.proxy_uuid = p.uuid AND e.deleted_at IS NULL) AS environments_count,
                p.created_at, p.updated_at, p.deleted_at
@@ -129,7 +129,7 @@ pub async fn fetch_visible_proxies_for_user(
     let recs = sqlx::query_as::<_, ProxyDto>(
         r#"
         SELECT DISTINCT p.id, p.uuid, p.workspace_uuid, p.owner_uuid, p.name, p.host, p.port, p.proxy_type,
-               p.username, p.password_encrypted, p.ssh_key_encrypted, p.ssh_passphrase_encrypted,
+               p.username, p.password, p.ssh_key_encrypted, p.ssh_passphrase_encrypted,
                p.country, p.city, p.status, p.latency, p.last_check_ip, p.last_checked_at,
                (SELECT COUNT(*) FROM environments e WHERE e.proxy_uuid = p.uuid AND e.deleted_at IS NULL) AS environments_count,
                p.created_at, p.updated_at, p.deleted_at
@@ -185,7 +185,7 @@ pub async fn fetch_visible_proxies_for_user_paginated(
     let recs = sqlx::query_as::<_, ProxyDto>(
         r#"
         SELECT DISTINCT p.id, p.uuid, p.workspace_uuid, p.owner_uuid, p.name, p.host, p.port, p.proxy_type,
-               p.username, p.password_encrypted, p.ssh_key_encrypted, p.ssh_passphrase_encrypted,
+               p.username, p.password, p.ssh_key_encrypted, p.ssh_passphrase_encrypted,
                p.country, p.city, p.status, p.latency, p.last_check_ip, p.last_checked_at,
                (SELECT COUNT(*) FROM environments e WHERE e.proxy_uuid = p.uuid AND e.deleted_at IS NULL) AS environments_count,
                p.created_at, p.updated_at, p.deleted_at

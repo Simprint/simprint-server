@@ -498,9 +498,7 @@ pub async fn fetch_environments_count(
     }
 
     // 构建查询
-    let mut sql_query = sqlx::query_scalar::<_, i64>(&query)
-        .bind(workspace_uuid)
-        .bind(team_uuid);
+    let mut sql_query = sqlx::query_scalar::<_, i64>(&query).bind(workspace_uuid).bind(team_uuid);
 
     // 绑定参数
     if let Some(g) = group_uuid {
@@ -723,7 +721,10 @@ pub async fn fetch_deleted_environments_base(
 
     // 关键词搜索
     if keyword.is_some() {
-        conditions.push(format!("(e.name ILIKE ${} OR e.uuid::text ILIKE ${})", param_index, param_index));
+        conditions.push(format!(
+            "(e.name ILIKE ${} OR e.uuid::text ILIKE ${})",
+            param_index, param_index
+        ));
         param_index += 1;
     }
 
@@ -784,7 +785,10 @@ pub async fn fetch_deleted_environments_count(
     }
 
     if keyword.is_some() {
-        conditions.push(format!("(e.name ILIKE ${} OR e.uuid::text ILIKE ${})", param_index, param_index));
+        conditions.push(format!(
+            "(e.name ILIKE ${} OR e.uuid::text ILIKE ${})",
+            param_index, param_index
+        ));
         param_index += 1;
     }
 
@@ -793,9 +797,7 @@ pub async fn fetch_deleted_environments_count(
         query.push_str(&conditions.join(" AND "));
     }
 
-    let mut q = sqlx::query_scalar::<_, i64>(&query)
-        .bind(workspace_uuid)
-        .bind(team_uuid);
+    let mut q = sqlx::query_scalar::<_, i64>(&query).bind(workspace_uuid).bind(team_uuid);
 
     if let Some(gid) = group_uuid {
         q = q.bind(gid);
@@ -844,7 +846,10 @@ pub async fn batch_restore_environments(
 }
 
 /// 永久删除环境（真正的 DELETE）
-pub async fn permanent_delete_environment(pool: &Pool<Postgres>, env_uuid: Uuid) -> Result<(), Error> {
+pub async fn permanent_delete_environment(
+    pool: &Pool<Postgres>,
+    env_uuid: Uuid,
+) -> Result<(), Error> {
     // 先删除关联数据
     sqlx::query("DELETE FROM environment_tags WHERE environment_uuid = $1")
         .bind(env_uuid)
@@ -1201,7 +1206,7 @@ pub async fn fetch_proxies_by_uuids(
     let recs = sqlx::query_as::<_, ProxyRowDto>(
         r#"
         SELECT id, uuid, name, host, port, proxy_type,
-               username, password_encrypted,
+               username, password,
                country, city, status, latency, last_check_ip
         FROM proxies
         WHERE uuid = ANY($1) AND deleted_at IS NULL
