@@ -1,8 +1,3 @@
-pub mod gray_releases;
-pub mod gray_resources;
-pub mod machine_gray_allocations;
-pub mod machine_tags;
-pub mod machine_users;
 pub mod maintenance;
 pub mod strategy_types;
 pub mod user;
@@ -11,12 +6,12 @@ pub mod versions;
 
 // 新增模块
 pub mod accounts;
-pub mod local_api;
 pub mod audit;
 pub mod billing;
 pub mod environments;
 pub mod extensions;
 pub mod group_member_permissions;
+pub mod local_api;
 pub mod messages;
 pub mod proxies;
 pub mod proxy_visible_teams;
@@ -27,11 +22,6 @@ pub mod teams;
 pub mod workspace_quotas;
 pub mod workspaces;
 
-pub use gray_releases::*;
-pub use gray_resources::*;
-pub use machine_gray_allocations::*;
-pub use machine_tags::*;
-pub use machine_users::*;
 pub use maintenance::*;
 pub use strategy_types::*;
 pub use user::*;
@@ -40,12 +30,12 @@ pub use versions::*;
 
 // 新增导出
 pub use accounts::*;
-pub use local_api::*;
 pub use audit::*;
 pub use billing::*;
 pub use environments::*;
 pub use extensions::*;
 pub use group_member_permissions::*;
+pub use local_api::*;
 pub use messages::*;
 pub use proxies::*;
 pub use proxy_visible_teams::*;

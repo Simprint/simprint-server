@@ -1,6 +1,5 @@
 mod config;
 mod extractor;
-pub mod gray_checker;
 mod jwt;
 mod password;
 mod responses;

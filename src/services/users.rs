@@ -5,9 +5,9 @@ use crate::caches::{
     set_reset_password_code, set_user_public_key,
 };
 use crate::entitys::{
-    CreateMachineUserRequest, LoginRequest, LoginResponse, MachineInfo, RegisterRequest,
-    RegisterResponse, ResetPasswordRequest, UpdatePasswordRequest, UpdateUserRequest,
-    UserResponse, VerifyPasswordRequest, VerifyPasswordResponse,
+    LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, ResetPasswordRequest,
+    UpdatePasswordRequest, UpdateUserRequest, UserResponse, VerifyPasswordRequest,
+    VerifyPasswordResponse,
 };
 use crate::models::{
     billing,
@@ -27,13 +27,11 @@ use crate::utils::{
 /// 处理登录、注册、记住密码登录的共同逻辑：
 /// - 生成 Token
 /// - 保存公钥到缓存
-/// - 注册/绑定机器用户
 /// - 获取用户信息
 async fn common_login_logic(
     svc_ctx: &SvcCtx,
     user_uuid: Uuid,
     public_key: Option<&String>,
-    machine_info: Option<&MachineInfo>,
 ) -> Result<(String, String, Option<UserResponse>), anyhow::Error> {
     let secret = svc_ctx.config.app.secret.as_bytes();
 
@@ -49,27 +47,7 @@ async fn common_login_logic(
         }
     }
 
-    // 3. 如果提供了机器信息，注册/绑定机器用户
-    if let Some(ref machine_info) = machine_info {
-        if !machine_info.machine_code.is_empty() {
-            let _ = crate::services::machine_users::register_machine(
-                svc_ctx,
-                CreateMachineUserRequest {
-                    machine_code: machine_info.machine_code.clone(),
-                    user_uuid: Some(user_uuid),
-                    platform: machine_info.platform.clone(),
-                    hardware_hash: machine_info.hardware_hash.clone(),
-                    hardware_raw: machine_info.hardware_raw.clone(),
-                    version_info: machine_info.version_info.clone(),
-                    tags: None,
-                },
-            )
-            .await;
-            // 注册失败不影响登录流程，只记录错误
-        }
-    }
-
-    // 4. 获取用户信息
+    // 3. 获取用户信息
     let user_info = get_current_user_service(svc_ctx, user_uuid).await.ok();
 
     Ok((access_token, refresh_token, user_info))
@@ -114,13 +92,8 @@ pub async fn register_service(
     let _ = issue_welcome_coupons(svc_ctx, user_uuid).await;
 
     // 6. 执行通用登录逻辑
-    let (access_token, refresh_token, user_info) = common_login_logic(
-        svc_ctx,
-        user_uuid,
-        payload.public_secret_key.as_ref(),
-        payload.machine_info.as_ref(),
-    )
-    .await?;
+    let (access_token, refresh_token, user_info) =
+        common_login_logic(svc_ctx, user_uuid, payload.public_secret_key.as_ref()).await?;
 
     // 7. 发送欢迎系统通知
     let _ = messages::create_message_service(
@@ -186,7 +159,7 @@ pub async fn login_service(
     payload: LoginRequest,
 ) -> Result<LoginResponse, anyhow::Error> {
     let pool = &svc_ctx.db;
-    let (user_uuid, machine_info, public_secret_key) = match payload {
+    let (user_uuid, public_secret_key) = match payload {
         LoginRequest::Basic(data) => {
             // 基本登录：验证邮箱和密码
             // 1. 查询用户
@@ -204,11 +177,7 @@ pub async fn login_service(
                 return Err(anyhow::anyhow!("用户已被禁用"));
             }
 
-            (
-                user_info.user_uuid,
-                data.machine_info,
-                data.public_secret_key,
-            )
+            (user_info.user_uuid, data.public_secret_key)
         }
         LoginRequest::Remember(data) => {
             // 记住密码登录：验证 refresh_token
@@ -232,18 +201,13 @@ pub async fn login_service(
                 return Err(anyhow::anyhow!("用户已被禁用"));
             }
 
-            (user_uuid, data.machine_info, data.public_secret_key)
+            (user_uuid, data.public_secret_key)
         }
     };
 
     // 执行通用登录逻辑
-    let (access_token, refresh_token, user_response) = common_login_logic(
-        svc_ctx,
-        user_uuid,
-        public_secret_key.as_ref(),
-        machine_info.as_ref(),
-    )
-    .await?;
+    let (access_token, refresh_token, user_response) =
+        common_login_logic(svc_ctx, user_uuid, public_secret_key.as_ref()).await?;
 
     Ok(LoginResponse {
         access_token,
@@ -340,16 +304,13 @@ pub async fn get_current_user_service(
         None
     };
 
-    let avatar_url = user_info
-        .avatar_hash
-        .as_ref()
-        .map(|hash| {
-            crate::utils::storage::get_objects::get_avatar_url(
-                &svc_ctx.config.storage.public_base_url,
-                &svc_ctx.config.storage.avatar_root,
-                hash,
-            )
-        });
+    let avatar_url = user_info.avatar_hash.as_ref().map(|hash| {
+        crate::utils::storage::get_objects::get_avatar_url(
+            &svc_ctx.config.storage.public_base_url,
+            &svc_ctx.config.storage.avatar_root,
+            hash,
+        )
+    });
 
     Ok(UserResponse {
         uuid: user.uuid,

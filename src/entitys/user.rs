@@ -2,20 +2,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// 机器信息（用于注册和登录）
-#[derive(Debug, Deserialize, Serialize, Default, Clone)]
-pub struct MachineInfo {
-    pub machine_code: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub platform: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub hardware_hash: Option<String>, // 硬件哈希
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub hardware_raw: Option<String>, // 硬件原始信息
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub version_info: Option<String>, // JSON格式的版本信息
-}
-
 /// 注册请求
 #[derive(Debug, Deserialize, Serialize, Default)]
 pub struct RegisterRequest {
@@ -27,8 +13,6 @@ pub struct RegisterRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub public_secret_key: Option<String>, // 用户公钥（可选）
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub machine_info: Option<MachineInfo>, // 机器信息（可选）
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub referral_code: Option<String>, // 推荐码（可选）
 }
 
@@ -38,8 +22,6 @@ pub struct BasicLoginData {
     pub email: String,
     pub password: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub machine_info: Option<MachineInfo>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub public_secret_key: Option<String>,
 }
 
@@ -48,8 +30,6 @@ pub struct BasicLoginData {
 pub struct RememberLoginData {
     pub email: String,
     pub refresh_token: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub machine_info: Option<MachineInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub public_secret_key: Option<String>,
 }

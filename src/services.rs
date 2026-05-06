@@ -1,8 +1,3 @@
-mod gray_releases;
-mod gray_resources;
-mod machine_gray_allocations;
-mod machine_tags;
-mod machine_users;
 mod maintenance;
 mod strategy_types;
 mod time;
@@ -12,15 +7,15 @@ mod versions;
 
 // 新增模块
 pub mod accounts;
-pub mod local_api;
 pub mod audit;
-pub mod browser_kernel;
 pub mod billing;
+pub mod browser_kernel;
 pub mod coupons;
 pub mod environments;
 pub mod extensions;
 pub mod group_permissions;
 pub mod groups;
+pub mod local_api;
 pub mod messages;
 pub mod orders;
 pub mod plans;
@@ -37,11 +32,6 @@ pub mod wallet;
 pub mod workspace_quotas;
 pub mod workspaces;
 
-pub use gray_releases::*;
-pub use gray_resources::*;
-pub use machine_gray_allocations::*;
-pub use machine_tags::*;
-pub use machine_users::*;
 pub use maintenance::*;
 pub use strategy_types::*;
 pub use time::*;

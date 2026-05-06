@@ -4,13 +4,12 @@ use axum::{Router, middleware};
 use simprint_server::{init_encrypt_secret, init_storage};
 use simprint_server::{
     middlewares,
-    routes::{
-        accounts, audit, billing, browser_kernel, environments, extensions, local_api,
-        group_permissions, messages,
-        preferences, proxies, proxy_visibility, referral, rpa, secret, teams, templates, time,
-        users, workspace_quotas, workspaces,
-    },
     routes::route::MetaRoute,
+    routes::{
+        accounts, audit, billing, browser_kernel, environments, extensions, group_permissions,
+        local_api, messages, preferences, proxies, proxy_visibility, referral, rpa, secret, teams,
+        templates, time, users, workspace_quotas, workspaces,
+    },
     svc_ctx::SvcCtx,
     utils::IConfig,
 };
@@ -107,10 +106,6 @@ fn register_middlewares(svc_ctx: &SvcCtx, app: Router<SvcCtx>) -> Router<SvcCtx>
     .route_layer(middleware::from_fn_with_state(
         svc_ctx.clone(),
         middlewares::local_api_auth,
-    ))
-    .route_layer(middleware::from_fn_with_state(
-        svc_ctx.clone(),
-        middlewares::machine_auth,
     ))
     .route_layer(middleware::from_fn_with_state(
         svc_ctx.clone(),

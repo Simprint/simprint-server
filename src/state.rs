@@ -18,15 +18,6 @@ pub struct CurrentIpAddr {
     pub real_ip: String,
 }
 
-/// 当前机器用户
-#[derive(Debug, Clone)]
-pub struct CurrentMachineUser {
-    pub machine_code: String,
-    pub platform: Option<String>,
-    pub user_uuid: Option<uuid::Uuid>,
-    pub is_allowed: bool, // 是否允许使用
-}
-
 /// 请求上下文 - 包含所有请求相关的上下文信息
 ///
 /// 在中间件中逐步填充，handler 中通过 Extension 获取
@@ -36,8 +27,6 @@ pub struct RequestContext {
     pub current_user: Option<CurrentUser>,
     /// 当前 IP 地址
     pub current_ip_addr: Option<CurrentIpAddr>,
-    /// 当前机器用户
-    pub current_machine_user: Option<CurrentMachineUser>,
     /// 当前团队 UUID
     pub current_team_uuid: Option<Uuid>,
     /// 当前工作空间 UUID
@@ -86,8 +75,8 @@ impl RequestContext {
     /// 获取资源路径（从资源标识符中提取路径部分）
     /// 例如：POST+/environments -> /environments
     pub fn resource_path(&self) -> Option<&str> {
-        self.resource_identifier.as_ref().and_then(|id| {
-            id.split_once('+').map(|(_, path)| path)
-        })
+        self.resource_identifier
+            .as_ref()
+            .and_then(|id| id.split_once('+').map(|(_, path)| path))
     }
 }

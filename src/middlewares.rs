@@ -2,18 +2,16 @@ mod auth;
 mod cors;
 mod decrypt;
 mod encrypt;
-mod logger;
 mod local_api_auth;
-mod machine_auth;
+mod logger;
 mod real_ip;
 
 pub use auth::*;
 pub use cors::*;
 pub use decrypt::*;
 pub use encrypt::*;
-pub use logger::*;
 pub use local_api_auth::*;
-pub use machine_auth::*;
+pub use logger::*;
 pub use real_ip::*;
 
 use axum::extract::{MatchedPath, Request};
