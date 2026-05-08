@@ -436,6 +436,19 @@ pub async fn send_verification_code_service(
     email: &str,
     code_type: &str,
 ) -> Result<(), anyhow::Error> {
+    if code_type == "reset_password" {
+        let user_exists = fetch_user_info_by_email(&svc_ctx.db, email).await?.is_some();
+        if !user_exists {
+            return Err(anyhow::anyhow!("用户不存在"));
+        }
+    }
+
+    let smtp_config = svc_ctx
+        .config
+        .clone()
+        .smtp
+        .ok_or_else(|| anyhow::anyhow!("邮箱配置不存在"))?;
+
     // 1. 生成验证码
     let code = random_six_number_code();
 
@@ -447,7 +460,6 @@ pub async fn send_verification_code_service(
     }
 
     // 3. 发送邮件
-    let smtp_config = svc_ctx.config.clone().smtp.expect("邮箱配置不存在");
     let title = match code_type {
         "register" => "注册验证码",
         "reset_password" => "重置密码验证码",
