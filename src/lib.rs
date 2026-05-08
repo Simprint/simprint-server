@@ -1,6 +1,7 @@
 use crate::utils::IConfig;
 
 pub mod caches;
+pub mod cli;
 pub mod dto;
 pub mod entitys;
 pub mod errors;
@@ -30,6 +31,6 @@ pub async fn init_storage(config: &IConfig) {
         None,
         None,
     )
-        .await
-        .expect("初始化对象存储客户端失败");
+    .await
+    .expect("初始化对象存储客户端失败");
 }

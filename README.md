@@ -76,7 +76,34 @@ uv run python build_docker.py --dev --no-package
 
 ```bash
 ./simprint-server -f=configs/config.dev.toml
+./simprint-server -f=configs/config.dev.toml serve
 ```
+
+### Docker 部署配置模板
+
+对外发布的 Docker 部署包仅包含 `configs/config.toml` 配置模板。
+部署前请先按实际环境修改这个文件。
+其中数据库连接串默认指向 Compose 内的 `postgres` 服务，
+如果你修改了 `docker-compose.yml` 里的 `POSTGRES_USER`、`POSTGRES_PASSWORD` 或数据库名，
+需要同步修改 `configs/config.toml` 中的 `[database].url`。
+RSA 密钥不会随部署包下发，服务首次启动时会在容器卷中自动生成并持久化保存。
+
+然后再使用 Docker Compose 启动，Compose 默认读取：
+
+```bash
+/app/configs/config.toml
+```
+
+### 初始化数据库
+
+数据库迁移已编译进 `simprint-server` 二进制，并会在服务启动时自动执行。
+因此部署时无需再单独执行迁移命令。
+
+```bash
+docker compose up -d
+```
+
+该流程无需额外公开 `migrations/` 目录。
 
 ### 服务入口
 

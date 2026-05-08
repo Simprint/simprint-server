@@ -1,8 +1,7 @@
-use std::env;
-
 use axum::{Router, middleware};
-use simprint_server::{init_encrypt_secret, init_storage};
+use clap::Parser;
 use simprint_server::{
+    cli::{Cli, Commands},
     middlewares,
     routes::route::MetaRoute,
     routes::{
@@ -13,19 +12,18 @@ use simprint_server::{
     svc_ctx::SvcCtx,
     utils::IConfig,
 };
+use simprint_server::{init_encrypt_secret, init_storage};
+
+static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 支持接收-f参数，指定配置文件路径
-    let config_path = env::args()
-        .find(|arg| arg.starts_with("-f"))
-        .map(|arg| arg.split("=").nth(1).unwrap().to_string())
-        .expect("config path is required");
-
+    let cli = Cli::parse();
+    let (config_path, command) = cli.command_or_default();
     let config = IConfig::build_by_filepath(&config_path).expect("failed to build config");
 
-    if let Err(e) = run_server(config).await {
-        return Err(e.into());
+    match command {
+        Commands::Serve => run_server(config).await?,
     }
 
     Ok(())
@@ -38,6 +36,11 @@ async fn run_server(config: IConfig) -> Result<(), Box<dyn std::error::Error>> {
         .with_target(true)
         .with_thread_ids(true)
         .init();
+
+    let db = SvcCtx::create_db(&config.database).await?;
+    tracing::info!("Running embedded database migrations");
+    MIGRATOR.run(&db).await?;
+    tracing::info!("Embedded database migrations completed");
 
     let svc_ctx = SvcCtx::new(&config).await?;
 
@@ -59,7 +62,6 @@ async fn run_server(config: IConfig) -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, app).await?;
     Ok(())
 }
-
 /// 注册所有路由
 fn register_all_routes(svc_ctx: &SvcCtx) -> Router<SvcCtx> {
     let mut meta_route = MetaRoute::new(svc_ctx.config.app.prefix.clone());

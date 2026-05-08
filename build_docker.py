@@ -36,8 +36,10 @@ PACKAGE_FILES = [
     "Dockerfile",
     "docker-compose.yml",
     ".dockerignore",
-    "configs",
-    "assets",
+]
+
+PACKAGE_CONFIG_FILES = [
+    ("configs/config.example.toml", "configs/config.toml"),
 ]
 
 # 需要打包的二进制文件（在构建后复制）
@@ -211,6 +213,24 @@ def prepare_package_directory() -> Path:
             copied_count += 1
         except Exception as e:
             print(f"  ✗ 复制失败 {item}: {e}")
+
+    # 仅复制对外发布需要的示例配置文件
+    print(f"\n  复制配置模板:")
+    for source_item, dest_item in PACKAGE_CONFIG_FILES:
+        source = PROJECT_ROOT / source_item
+        dest = package_dir / dest_item
+
+        if not source.exists():
+            print(f"  ⚠ 警告: {source_item} 不存在，跳过")
+            continue
+
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, dest)
+            print(f"  ✓ 复制文件: {source_item} -> {dest_item}")
+            copied_count += 1
+        except Exception as e:
+            print(f"  ✗ 复制失败 {source_item}: {e}")
     
     # 复制二进制文件
     print(f"\n  复制二进制文件:")
@@ -234,14 +254,14 @@ def prepare_package_directory() -> Path:
 - 二进制文件: {', '.join(SERVICES)}
 - Dockerfile: Docker 镜像构建文件
 - docker-compose.yml: Docker Compose 配置文件
-- configs/: 配置文件目录
-- assets/: 资源文件目录
+- configs/config.toml: 配置模板
+- 自动生成的密钥会保存在 Docker 卷中，不随部署包分发
 
 ## 使用方法
 
 1. 解压压缩包到目标目录
 
-2. 确保配置文件中的数据库、Redis、对象存储地址正确
+2. 确保 `configs/config.toml` 中的数据库、Redis、对象存储地址正确
 
 3. 构建 Docker 镜像:
    ```bash
@@ -257,6 +277,8 @@ def prepare_package_directory() -> Path:
    ```bash
    docker-compose ps
    ```
+
+服务启动时会自动执行数据库迁移。
 
 6. 查看日志:
    ```bash

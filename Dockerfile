@@ -24,12 +24,13 @@ ARG BINARY_NAME
 # 从本地根目录复制已编译的二进制文件到固定路径
 COPY --chown=appuser:appuser ${BINARY_NAME} /app/app
 
-# 复制配置文件目录和资源文件
+# 复制配置文件目录
 COPY --chown=appuser:appuser configs ./configs
-COPY --chown=appuser:appuser assets ./assets
 
 # 设置文件权限
-RUN chmod +x /app/app
+RUN mkdir -p /app/assets/secret \
+    && chown -R appuser:appuser /app/assets \
+    && chmod +x /app/app
 
 # 切换到非 root 用户
 USER appuser
