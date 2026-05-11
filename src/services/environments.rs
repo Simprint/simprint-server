@@ -9,7 +9,7 @@ use crate::entitys::{
     AddEnvironmentCookieRequest, AddEnvironmentUrlRequest, AssignTagsRequest,
     BatchAssignTagRequest, BatchCreateEnvironmentRequest, BatchMoveToGroupRequest,
     BatchRemoveTagsRequest, CookieInput, CreateEnvironmentRequest, ListEnvironmentsRequest,
-    MoveToGroupRequest, SetEnvironmentProxyRequest, UpdateEnvironmentRequest,
+    MoveToGroupRequest, SetEnvironmentProxyRequest, UpdateEnvironmentRequest, UrlInput,
 };
 use crate::models;
 use crate::services::accounts;
@@ -117,6 +117,8 @@ pub async fn create_environment_service(
     )
     .await
     .map_err(|e| e.to_string())?;
+
+    replace_environment_urls(svc_ctx, env_uuid, payload.urls.as_deref()).await?;
 
     // 分配标签
     if let Some(tag_uuids) = &payload.tag_uuids {
@@ -226,6 +228,39 @@ fn parse_cookie_strings(cookie_strings: &[String]) -> Result<Vec<CookieInput>, S
     }
 
     Ok(cookies)
+}
+
+async fn replace_environment_urls(
+    svc_ctx: &SvcCtx,
+    env_uuid: Uuid,
+    urls: Option<&[UrlInput]>,
+) -> Result<(), String> {
+    let Some(urls) = urls else {
+        return Ok(());
+    };
+
+    models::clear_environment_urls(&svc_ctx.db, env_uuid)
+        .await
+        .map_err(|e| format!("清空 URLs 失败: {}", e))?;
+
+    for (idx, item) in urls.iter().enumerate() {
+        let url = item.url.trim();
+        if url.is_empty() {
+            continue;
+        }
+
+        models::insert_environment_url(
+            &svc_ctx.db,
+            env_uuid,
+            url,
+            item.title.as_deref(),
+            item.sort_order.or(Some(idx as i32)),
+        )
+        .await
+        .map_err(|e| format!("保存 URL 失败: {}", e))?;
+    }
+
+    Ok(())
 }
 
 /// 获取环境列表（包含完整关联数据）
@@ -389,6 +424,16 @@ pub async fn get_environments_service(
         });
     }
 
+    let mut urls_map: HashMap<Uuid, Vec<EnvironmentUrlDto>> = HashMap::new();
+    if !env_uuids.is_empty() {
+        let url_rows = models::fetch_environment_urls_by_uuids(&svc_ctx.db, &env_uuids)
+            .await
+            .map_err(|e| e.to_string())?;
+        for url in url_rows {
+            urls_map.entry(url.environment_uuid).or_default().push(url);
+        }
+    }
+
     // 批量查询账号
     let mut accounts_map: HashMap<Uuid, Vec<PlatformAccountDto>> = HashMap::new();
     for env_uuid in &env_uuids {
@@ -471,6 +516,7 @@ pub async fn get_environments_service(
             crate::entitys::EnvironmentDetailResponse {
                 environment,
                 config: configs_map.remove(&row.uuid), // 返回配置信息，用于传递给指纹浏览器内核
+                urls: urls_map.remove(&row.uuid).unwrap_or_default(),
                 tags: tags_map.remove(&row.uuid).unwrap_or_default(),
                 accounts: accounts_map.remove(&row.uuid).unwrap_or_default(),
                 group,
@@ -568,6 +614,9 @@ pub async fn get_environment_detail_service(
         get_environment_service(svc_ctx, workspace_uuid, team_uuid, user_uuid, env_uuid).await?;
 
     let config = get_environment_config_service(svc_ctx, env_uuid).await.ok();
+    let urls = get_environment_urls_service(svc_ctx, env_uuid)
+        .await
+        .unwrap_or_default();
 
     let tags = get_environment_tags_service(svc_ctx, env_uuid).await?;
 
@@ -602,6 +651,7 @@ pub async fn get_environment_detail_service(
     Ok(crate::entitys::EnvironmentDetailResponse {
         environment,
         config,
+        urls,
         tags,
         accounts,
         group,
@@ -741,6 +791,8 @@ pub async fn update_environment_service(
         .await
         .map_err(|e| e.to_string())?;
     }
+
+    replace_environment_urls(svc_ctx, payload.uuid, payload.urls.as_deref()).await?;
 
     Ok(())
 }
@@ -1045,6 +1097,17 @@ pub async fn get_recycle_bin_environments_service(
         });
     }
 
+    let mut env_urls_map: HashMap<Uuid, Vec<EnvironmentUrlDto>> = HashMap::new();
+    let url_rows = models::fetch_environment_urls_by_uuids(&svc_ctx.db, &env_uuids)
+        .await
+        .map_err(|e| e.to_string())?;
+    for url in url_rows {
+        env_urls_map
+            .entry(url.environment_uuid)
+            .or_default()
+            .push(url);
+    }
+
     // 9. 批量查询账号信息
     let mut env_accounts_map: HashMap<Uuid, Vec<PlatformAccountDto>> = HashMap::new();
     for env_uuid in &env_uuids {
@@ -1086,6 +1149,7 @@ pub async fn get_recycle_bin_environments_service(
                     deleted_at: None,
                 },
                 config: None,
+                urls: env_urls_map.remove(&row.uuid).unwrap_or_default(),
                 tags,
                 accounts,
                 group,

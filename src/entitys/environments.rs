@@ -32,6 +32,7 @@ pub struct CreateEnvironmentRequest {
     pub account_uuids: Option<Vec<Uuid>>,
     pub proxy_uuid: Option<Uuid>,     // 代理 UUID（单个，可选）
     pub cookies: Option<Vec<String>>, // Cookie 字符串数组（如 "name=value" 或 "name=value; domain=example.com"）
+    pub urls: Option<Vec<UrlInput>>,
     pub config: EnvironmentConfigRequest,
 }
 
@@ -60,6 +61,7 @@ pub struct UpdateEnvironmentRequest {
     pub name: Option<String>,
     pub description: Option<String>,
     pub group_uuid: Option<Uuid>,
+    pub urls: Option<Vec<UrlInput>>,
     pub config: Option<EnvironmentConfigRequest>,
 }
 
@@ -142,6 +144,7 @@ pub struct BatchAddEnvironmentUrlsRequest {
 pub struct UrlInput {
     pub url: String,
     pub title: Option<String>,
+    pub sort_order: Option<i32>,
 }
 
 /// 删除环境 URL 请求
@@ -230,6 +233,7 @@ pub struct EnvironmentListResponse {
 pub struct EnvironmentDetailResponse {
     pub environment: crate::dto::EnvironmentDto,
     pub config: Option<crate::dto::EnvironmentConfigDto>,
+    pub urls: Vec<crate::dto::EnvironmentUrlDto>,
     pub tags: Vec<crate::dto::TagDto>,
     pub accounts: Vec<crate::dto::PlatformAccountDto>,
     pub group: Option<crate::dto::GroupSummaryDto>, // 分组完整信息

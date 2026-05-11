@@ -253,7 +253,7 @@ pub struct EnvironmentTagDto {
 }
 
 /// 环境 URL DTO
-#[derive(Debug, Clone, FromRow, Serialize)]
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct EnvironmentUrlDto {
     pub id: i32,
     pub environment_uuid: Uuid,

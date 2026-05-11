@@ -1468,6 +1468,30 @@ pub async fn fetch_environment_urls(
     Ok(recs)
 }
 
+/// 批量查询环境的所有 URL
+pub async fn fetch_environment_urls_by_uuids(
+    pool: &Pool<Postgres>,
+    env_uuids: &[Uuid],
+) -> Result<Vec<EnvironmentUrlDto>, Error> {
+    if env_uuids.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let recs = sqlx::query_as::<_, EnvironmentUrlDto>(
+        r#"
+        SELECT id, environment_uuid, url, title, sort_order, created_at
+        FROM environment_urls
+        WHERE environment_uuid = ANY($1)
+        ORDER BY environment_uuid, sort_order, id
+        "#,
+    )
+    .bind(env_uuids)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(recs)
+}
+
 /// 删除环境的 URL
 pub async fn delete_environment_url(pool: &Pool<Postgres>, url_id: i32) -> Result<(), Error> {
     sqlx::query(

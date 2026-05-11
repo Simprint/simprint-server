@@ -252,7 +252,7 @@ pub async fn get_environment_handler(
         .ok_or_else(|| Response::fail(Some("请先选择工作空间")))?;
     let team_uuid = ctx.current_team_uuid.ok_or_else(|| Response::fail(Some("请先选择团队")))?;
 
-    let environment = services::environments::get_environment_service(
+    let detail = services::environments::get_environment_detail_service(
         &svc_ctx,
         workspace_uuid,
         team_uuid,
@@ -262,57 +262,9 @@ pub async fn get_environment_handler(
     .await
     .map_err(|e| Response::fail(Some(&e)))?;
 
-    let config = services::environments::get_environment_config_service(&svc_ctx, payload.uuid)
-        .await
-        .ok();
-
-    let tags = services::environments::get_environment_tags_service(&svc_ctx, payload.uuid)
-        .await
-        .map_err(|e| Response::fail(Some(&e)))?;
-
-    let accounts = services::accounts::get_environment_accounts_service(&svc_ctx, payload.uuid)
-        .await
-        .unwrap_or_default();
-
-    // 获取分组信息
-    let group = if let Some(group_uuid) = environment.group_uuid {
-        services::environments::get_group_summary_service(&svc_ctx, group_uuid)
-            .await
-            .ok()
-    } else {
-        None
-    };
-
-    // 获取代理信息
-    let proxy = if let Some(proxy_uuid) = environment.proxy_uuid {
-        services::environments::get_proxy_summary_service(&svc_ctx, proxy_uuid)
-            .await
-            .ok()
-    } else {
-        None
-    };
-
-    // 获取扩展列表
-    let extensions = crate::services::extensions::get_environment_extensions_service(
-        &svc_ctx,
-        ctx.user_uuid_unwrap(),
-        team_uuid,
-        environment.group_uuid,
-    )
-    .await
-    .unwrap_or_default();
-
     Ok(Response::success(
         Some("获取成功"),
-        Some(EnvironmentDetailResponse {
-            environment,
-            config,
-            tags,
-            accounts,
-            group,
-            proxy,
-            extensions,
-        }),
+        Some(detail),
     ))
 }
 
@@ -332,7 +284,7 @@ pub async fn batch_get_environments_handler(
     for uuid in payload.uuids {
         // 对每个 UUID 尝试获取环境详情，失败则跳过
         let detail = async {
-            let environment = services::environments::get_environment_service(
+            services::environments::get_environment_detail_service(
                 &svc_ctx,
                 workspace_uuid,
                 team_uuid,
@@ -340,55 +292,7 @@ pub async fn batch_get_environments_handler(
                 uuid,
             )
             .await
-            .ok()?;
-
-            let config = services::environments::get_environment_config_service(&svc_ctx, uuid)
-                .await
-                .ok();
-
-            let tags = services::environments::get_environment_tags_service(&svc_ctx, uuid)
-                .await
-                .ok()?;
-
-            let accounts = services::accounts::get_environment_accounts_service(&svc_ctx, uuid)
-                .await
-                .unwrap_or_default();
-
-            let group = if let Some(group_uuid) = environment.group_uuid {
-                services::environments::get_group_summary_service(&svc_ctx, group_uuid)
-                    .await
-                    .ok()
-            } else {
-                None
-            };
-
-            let proxy = if let Some(proxy_uuid) = environment.proxy_uuid {
-                services::environments::get_proxy_summary_service(&svc_ctx, proxy_uuid)
-                    .await
-                    .ok()
-            } else {
-                None
-            };
-
-            // 获取扩展列表
-            let extensions = crate::services::extensions::get_environment_extensions_service(
-                &svc_ctx,
-                ctx.user_uuid_unwrap(),
-                team_uuid,
-                environment.group_uuid,
-            )
-            .await
-            .unwrap_or_default();
-
-            Some(EnvironmentDetailResponse {
-                environment,
-                config,
-                tags,
-                accounts,
-                group,
-                proxy,
-                extensions,
-            })
+            .ok()
         }
         .await;
 

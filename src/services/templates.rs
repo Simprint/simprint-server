@@ -234,6 +234,17 @@ pub async fn apply_template_service(
         name: None,
         description: None,
         group_uuid: None,
+        urls: Some(
+            env_detail
+                .urls
+                .iter()
+                .map(|item| crate::entitys::UrlInput {
+                    url: item.url.clone(),
+                    title: item.title.clone(),
+                    sort_order: item.sort_order,
+                })
+                .collect(),
+        ),
         config: env_detail.config.map(|config| crate::entitys::EnvironmentConfigRequest {
             window_info: config.window_info,
             basic_settings: config.basic_settings,
@@ -312,6 +323,17 @@ pub async fn create_from_template_service(
         },
         proxy_uuid,
         cookies: None, // 模板中不包含 cookies
+        urls: Some(
+            env_detail
+                .urls
+                .iter()
+                .map(|item| crate::entitys::UrlInput {
+                    url: item.url.clone(),
+                    title: item.title.clone(),
+                    sort_order: item.sort_order,
+                })
+                .collect(),
+        ),
         config: crate::entitys::EnvironmentConfigRequest {
             window_info: config.window_info,
             basic_settings: config.basic_settings,
