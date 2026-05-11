@@ -264,10 +264,11 @@ pub struct EnvironmentUrlDto {
 }
 
 /// 环境 Cookie DTO
-#[derive(Debug, Clone, FromRow, Serialize)]
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct EnvironmentCookieDto {
     pub id: i32,
     pub environment_uuid: Uuid,
+    pub site_input: String,
     pub domain: String,
     pub name: String,
     pub value: String,
@@ -277,6 +278,13 @@ pub struct EnvironmentCookieDto {
     pub secure: Option<bool>,
     pub same_site: Option<String>,
     pub created_at: DateTime<Utc>,
+}
+
+/// 环境 Cookie 分组 DTO
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnvironmentCookieGroupDto {
+    pub site: String,
+    pub cookie_text: String,
 }
 
 /// 模板 DTO

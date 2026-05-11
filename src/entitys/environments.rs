@@ -31,7 +31,7 @@ pub struct CreateEnvironmentRequest {
     pub tag_uuids: Option<Vec<Uuid>>,
     pub account_uuids: Option<Vec<Uuid>>,
     pub proxy_uuid: Option<Uuid>,     // 代理 UUID（单个，可选）
-    pub cookies: Option<Vec<String>>, // Cookie 字符串数组（如 "name=value" 或 "name=value; domain=example.com"）
+    pub cookies: Option<Vec<CookieGroupInput>>,
     pub urls: Option<Vec<UrlInput>>,
     pub config: EnvironmentConfigRequest,
 }
@@ -61,6 +61,7 @@ pub struct UpdateEnvironmentRequest {
     pub name: Option<String>,
     pub description: Option<String>,
     pub group_uuid: Option<Uuid>,
+    pub cookies: Option<Vec<CookieGroupInput>>,
     pub urls: Option<Vec<UrlInput>>,
     pub config: Option<EnvironmentConfigRequest>,
 }
@@ -165,32 +166,22 @@ pub struct ClearEnvironmentUrlsRequest {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AddEnvironmentCookieRequest {
     pub environment_uuid: Uuid,
-    pub domain: String,
-    pub name: String,
-    pub value: String,
-    pub path: Option<String>,
-    pub http_only: Option<bool>,
-    pub secure: Option<bool>,
-    pub same_site: Option<String>,
+    pub site: String,
+    pub cookie_text: String,
 }
 
 /// 批量添加环境 Cookie 请求
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct BatchAddEnvironmentCookiesRequest {
     pub environment_uuid: Uuid,
-    pub cookies: Vec<CookieInputRequest>,
+    pub cookies: Vec<CookieGroupInput>,
 }
 
-/// Cookie 输入
+/// Cookie 分组输入
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CookieInputRequest {
-    pub domain: String,
-    pub name: String,
-    pub value: String,
-    pub path: Option<String>,
-    pub http_only: Option<bool>,
-    pub secure: Option<bool>,
-    pub same_site: Option<String>,
+pub struct CookieGroupInput {
+    pub site: String,
+    pub cookie_text: String,
 }
 
 /// 删除环境 Cookie 请求
@@ -208,6 +199,7 @@ pub struct ClearEnvironmentCookiesRequest {
 /// Cookie 输入结构（用于批量添加）
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CookieInput {
+    pub site_input: String,
     pub domain: String,
     pub name: String,
     pub value: String,
@@ -233,6 +225,7 @@ pub struct EnvironmentListResponse {
 pub struct EnvironmentDetailResponse {
     pub environment: crate::dto::EnvironmentDto,
     pub config: Option<crate::dto::EnvironmentConfigDto>,
+    pub cookies: Vec<crate::dto::EnvironmentCookieGroupDto>,
     pub urls: Vec<crate::dto::EnvironmentUrlDto>,
     pub tags: Vec<crate::dto::TagDto>,
     pub accounts: Vec<crate::dto::PlatformAccountDto>,

@@ -777,7 +777,7 @@ pub async fn add_environment_cookie_handler(
 pub async fn get_environment_cookies_handler(
     State(svc_ctx): State<SvcCtx>,
     Json(payload): Json<UuidRequest>,
-) -> Result<Vec<crate::dto::EnvironmentCookieDto>> {
+) -> Result<Vec<crate::dto::EnvironmentCookieGroupDto>> {
     let cookies = services::environments::get_environment_cookies_service(&svc_ctx, payload.uuid)
         .await
         .map_err(|e| Response::fail(Some(&e)))?;

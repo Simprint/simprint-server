@@ -1526,6 +1526,7 @@ pub async fn clear_environment_urls(pool: &Pool<Postgres>, env_uuid: Uuid) -> Re
 pub async fn insert_environment_cookie(
     pool: &Pool<Postgres>,
     env_uuid: Uuid,
+    site_input: &str,
     domain: &str,
     name: &str,
     value: &str,
@@ -1536,12 +1537,13 @@ pub async fn insert_environment_cookie(
 ) -> Result<i32, Error> {
     let id: i32 = sqlx::query_scalar(
         r#"
-        INSERT INTO environment_cookies (environment_uuid, domain, name, value, path, http_only, secure, same_site)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO environment_cookies (environment_uuid, site_input, domain, name, value, path, http_only, secure, same_site)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING id;
         "#,
     )
     .bind(env_uuid)
+    .bind(site_input)
     .bind(domain)
     .bind(name)
     .bind(value)
@@ -1565,12 +1567,13 @@ pub async fn batch_insert_environment_cookies(
     for cookie in cookies {
         sqlx::query(
             r#"
-            INSERT INTO environment_cookies (environment_uuid, domain, name, value, path, http_only, secure, same_site)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO environment_cookies (environment_uuid, site_input, domain, name, value, path, http_only, secure, same_site)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             ON CONFLICT DO NOTHING;
             "#,
         )
         .bind(env_uuid)
+        .bind(&cookie.site_input)
         .bind(&cookie.domain)
         .bind(&cookie.name)
         .bind(&cookie.value)
@@ -1592,13 +1595,37 @@ pub async fn fetch_environment_cookies(
 ) -> Result<Vec<EnvironmentCookieDto>, Error> {
     let recs = sqlx::query_as::<_, EnvironmentCookieDto>(
         r#"
-        SELECT id, environment_uuid, domain, name, value, path, expires_at, http_only, secure, same_site, created_at
+        SELECT id, environment_uuid, site_input, domain, name, value, path, expires_at, http_only, secure, same_site, created_at
         FROM environment_cookies
         WHERE environment_uuid = $1
-        ORDER BY domain, name
+        ORDER BY site_input, domain, name
         "#,
     )
     .bind(env_uuid)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(recs)
+}
+
+/// 批量查询环境的所有 Cookies
+pub async fn fetch_environment_cookies_by_uuids(
+    pool: &Pool<Postgres>,
+    env_uuids: &[Uuid],
+) -> Result<Vec<EnvironmentCookieDto>, Error> {
+    if env_uuids.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let recs = sqlx::query_as::<_, EnvironmentCookieDto>(
+        r#"
+        SELECT id, environment_uuid, site_input, domain, name, value, path, expires_at, http_only, secure, same_site, created_at
+        FROM environment_cookies
+        WHERE environment_uuid = ANY($1)
+        ORDER BY environment_uuid, site_input, domain, name
+        "#,
+    )
+    .bind(env_uuids)
     .fetch_all(pool)
     .await?;
 

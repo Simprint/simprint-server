@@ -234,6 +234,16 @@ pub async fn apply_template_service(
         name: None,
         description: None,
         group_uuid: None,
+        cookies: Some(
+            env_detail
+                .cookies
+                .iter()
+                .map(|item| crate::entitys::CookieGroupInput {
+                    site: item.site.clone(),
+                    cookie_text: item.cookie_text.clone(),
+                })
+                .collect(),
+        ),
         urls: Some(
             env_detail
                 .urls
@@ -322,7 +332,16 @@ pub async fn create_from_template_service(
             Some(account_uuids)
         },
         proxy_uuid,
-        cookies: None, // 模板中不包含 cookies
+        cookies: Some(
+            env_detail
+                .cookies
+                .iter()
+                .map(|item| crate::entitys::CookieGroupInput {
+                    site: item.site.clone(),
+                    cookie_text: item.cookie_text.clone(),
+                })
+                .collect(),
+        ),
         urls: Some(
             env_detail
                 .urls

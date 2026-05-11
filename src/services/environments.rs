@@ -1,15 +1,17 @@
 use std::collections::HashMap;
+use url::Url;
 use uuid::Uuid;
 
 use crate::dto::{
-    EnvironmentConfigDto, EnvironmentCookieDto, EnvironmentDto, EnvironmentUrlDto, GroupSummaryDto,
-    PlatformAccountDto, ProxySummaryDto, TagDto,
+    EnvironmentConfigDto, EnvironmentCookieDto, EnvironmentCookieGroupDto, EnvironmentDto,
+    EnvironmentUrlDto, GroupSummaryDto, PlatformAccountDto, ProxySummaryDto, TagDto,
 };
 use crate::entitys::{
     AddEnvironmentCookieRequest, AddEnvironmentUrlRequest, AssignTagsRequest,
     BatchAssignTagRequest, BatchCreateEnvironmentRequest, BatchMoveToGroupRequest,
-    BatchRemoveTagsRequest, CookieInput, CreateEnvironmentRequest, ListEnvironmentsRequest,
-    MoveToGroupRequest, SetEnvironmentProxyRequest, UpdateEnvironmentRequest, UrlInput,
+    BatchRemoveTagsRequest, CookieGroupInput, CookieInput, CreateEnvironmentRequest,
+    ListEnvironmentsRequest, MoveToGroupRequest, SetEnvironmentProxyRequest,
+    UpdateEnvironmentRequest, UrlInput,
 };
 use crate::models;
 use crate::services::accounts;
@@ -119,6 +121,7 @@ pub async fn create_environment_service(
     .map_err(|e| e.to_string())?;
 
     replace_environment_urls(svc_ctx, env_uuid, payload.urls.as_deref()).await?;
+    replace_environment_cookies(svc_ctx, env_uuid, payload.cookies.as_deref()).await?;
 
     // 分配标签
     if let Some(tag_uuids) = &payload.tag_uuids {
@@ -140,17 +143,6 @@ pub async fn create_environment_service(
         }
     }
 
-    // 添加 Cookies
-    if let Some(cookie_strings) = &payload.cookies {
-        let parsed_cookies = parse_cookie_strings(cookie_strings)?;
-        if !parsed_cookies.is_empty() {
-            let _ =
-                models::batch_insert_environment_cookies(&svc_ctx.db, env_uuid, &parsed_cookies)
-                    .await
-                    .map_err(|e| format!("添加 Cookies 失败: {}", e))?;
-        }
-    }
-
     // 4. 更新工作空间配额（创建后增加使用数）
     models::increment_used_environments(&svc_ctx.db, workspace_uuid, 1)
         .await
@@ -159,75 +151,282 @@ pub async fn create_environment_service(
     Ok(env_uuid)
 }
 
-/// 解析 Cookie 字符串数组为 CookieInput 数组
-/// Cookie 字符串格式支持：
-/// - 简单格式: "name=value"
-/// - 完整格式: "name=value; domain=example.com; path=/; secure; httpOnly"
-fn parse_cookie_strings(cookie_strings: &[String]) -> Result<Vec<CookieInput>, String> {
-    let mut cookies = Vec::new();
+#[derive(Debug, Clone)]
+struct CookieSiteTarget {
+    site_input: String,
+    domain: String,
+    path: String,
+    secure: bool,
+}
 
-    for cookie_str in cookie_strings {
-        let cookie_str = cookie_str.trim();
-        if cookie_str.is_empty() {
-            continue;
+fn normalize_cookie_path(path: &str) -> String {
+    if path.trim().is_empty() || path == "/" {
+        "/".to_string()
+    } else if path.starts_with('/') {
+        path.to_string()
+    } else {
+        format!("/{}", path)
+    }
+}
+
+fn parse_cookie_site(site: &str) -> Result<CookieSiteTarget, String> {
+    let site = site.trim();
+    if site.is_empty() {
+        return Err("Cookie 目标网页/域名不能为空".to_string());
+    }
+
+    if let Ok(parsed) = Url::parse(site) {
+        let host = parsed
+            .host_str()
+            .ok_or_else(|| format!("无效的 Cookie 目标网页: {}", site))?;
+
+        return Ok(CookieSiteTarget {
+            site_input: site.to_string(),
+            domain: host.to_string(),
+            path: normalize_cookie_path(parsed.path()),
+            secure: parsed.scheme().eq_ignore_ascii_case("https"),
+        });
+    }
+
+    if !site.contains("://") {
+        if site.starts_with('.') && !site.contains('/') && !site.chars().any(|ch| ch.is_whitespace()) {
+            return Ok(CookieSiteTarget {
+                site_input: site.to_string(),
+                domain: site.to_string(),
+                path: "/".to_string(),
+                secure: false,
+            });
         }
 
-        // 解析 cookie 字符串
-        let parts: Vec<&str> = cookie_str.split(';').map(|s| s.trim()).collect();
+        let candidate = format!("https://{}", site);
+        if let Ok(parsed) = Url::parse(&candidate) {
+            if let Some(host) = parsed.host_str() {
+                return Ok(CookieSiteTarget {
+                    site_input: site.to_string(),
+                    domain: host.to_string(),
+                    path: normalize_cookie_path(parsed.path()),
+                    secure: false,
+                });
+            }
+        }
+    }
+
+    Err(format!("无效的 Cookie 目标网页/域名: {}", site))
+}
+
+fn is_cookie_attribute(part: &str) -> bool {
+    let lower = part.trim().to_lowercase();
+    matches!(
+        lower.as_str(),
+        "secure" | "httponly" | "http-only" | "partitioned"
+    ) || lower.starts_with("domain=")
+        || lower.starts_with("path=")
+        || lower.starts_with("expires=")
+        || lower.starts_with("max-age=")
+        || lower.starts_with("samesite=")
+}
+
+fn parse_cookie_name_value(part: &str) -> Result<(String, String), String> {
+    let Some(eq_pos) = part.find('=') else {
+        return Err(format!("无效的 Cookie 格式: {}", part));
+    };
+
+    let name = part[..eq_pos].trim();
+    let value = part[eq_pos + 1..].trim();
+    if name.is_empty() {
+        return Err(format!("Cookie 名称不能为空: {}", part));
+    }
+
+    Ok((name.to_string(), value.to_string()))
+}
+
+fn parse_cookie_line_with_attrs(
+    line: &str,
+    site_target: &CookieSiteTarget,
+) -> Result<CookieInput, String> {
+    let parts: Vec<&str> = line.split(';').map(|part| part.trim()).filter(|part| !part.is_empty()).collect();
+    let (name, value) = parse_cookie_name_value(
+        parts
+            .first()
+            .copied()
+            .ok_or_else(|| "Cookie 内容不能为空".to_string())?,
+    )?;
+
+    let mut domain = site_target.domain.clone();
+    let mut path = site_target.path.clone();
+    let mut http_only = false;
+    let mut secure = site_target.secure;
+    let mut same_site = Some("Lax".to_string());
+
+    for part in parts.iter().skip(1) {
+        let lower = part.to_lowercase();
+        if lower.starts_with("domain=") {
+            domain = part[7..].trim().to_string();
+        } else if lower.starts_with("path=") {
+            path = normalize_cookie_path(part[5..].trim());
+        } else if lower == "secure" {
+            secure = true;
+        } else if lower == "httponly" || lower == "http-only" {
+            http_only = true;
+        } else if lower.starts_with("samesite=") {
+            same_site = Some(part[9..].trim().to_string());
+        }
+    }
+
+    Ok(CookieInput {
+        site_input: site_target.site_input.clone(),
+        domain,
+        name,
+        value,
+        path: Some(path),
+        http_only: Some(http_only),
+        secure: Some(secure),
+        same_site,
+    })
+}
+
+fn parse_cookie_group(group: &CookieGroupInput) -> Result<Vec<CookieInput>, String> {
+    let site_target = parse_cookie_site(&group.site)?;
+    let cookie_text = group.cookie_text.trim();
+    if cookie_text.is_empty() {
+        return Err("Cookie 内容不能为空".to_string());
+    }
+
+    let mut cookies = Vec::new();
+
+    for line in cookie_text
+        .lines()
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty())
+    {
+        let parts: Vec<&str> = line
+            .split(';')
+            .map(|part| part.trim())
+            .filter(|part| !part.is_empty())
+            .collect();
+
         if parts.is_empty() {
             continue;
         }
 
-        // 解析 name=value
-        let name_value = parts[0];
-        let (name, value) = if let Some(eq_pos) = name_value.find('=') {
-            (name_value[..eq_pos].trim(), name_value[eq_pos + 1..].trim())
-        } else {
-            return Err(format!("无效的 Cookie 格式: {}", cookie_str));
-        };
-
-        if name.is_empty() {
-            return Err(format!("Cookie 名称不能为空: {}", cookie_str));
+        let has_attr_style = parts.len() > 1 && parts.iter().skip(1).all(|part| is_cookie_attribute(part));
+        if has_attr_style {
+            cookies.push(parse_cookie_line_with_attrs(line, &site_target)?);
+            continue;
         }
 
-        // 解析其他属性
-        let mut domain = None;
-        let mut path = Some("/".to_string());
-        let mut http_only = Some(false);
-        let mut secure = Some(false);
-        let mut same_site = Some("Lax".to_string());
-
-        for part in parts.iter().skip(1) {
-            let part_lower = part.to_lowercase();
-            if part_lower.starts_with("domain=") {
-                domain = Some(part[7..].trim().to_string());
-            } else if part_lower.starts_with("path=") {
-                path = Some(part[5..].trim().to_string());
-            } else if part_lower == "secure" {
-                secure = Some(true);
-            } else if part_lower == "httponly" || part_lower == "http-only" {
-                http_only = Some(true);
-            } else if part_lower.starts_with("samesite=") {
-                same_site = Some(part[9..].trim().to_string());
-            }
+        for part in parts {
+            let (name, value) = parse_cookie_name_value(part)?;
+            cookies.push(CookieInput {
+                site_input: site_target.site_input.clone(),
+                domain: site_target.domain.clone(),
+                name,
+                value,
+                path: Some(site_target.path.clone()),
+                http_only: Some(false),
+                secure: Some(site_target.secure),
+                same_site: Some("Lax".to_string()),
+            });
         }
+    }
 
-        // 如果没有指定 domain，尝试从 cookie 值中推断（如果可能）
-        // 这里简化处理，如果没有 domain 则使用空字符串或默认值
-        let domain = domain.unwrap_or_else(|| "".to_string());
-
-        cookies.push(CookieInput {
-            domain,
-            name: name.to_string(),
-            value: value.to_string(),
-            path,
-            http_only,
-            secure,
-            same_site,
-        });
+    if cookies.is_empty() {
+        return Err("Cookie 内容不能为空".to_string());
     }
 
     Ok(cookies)
+}
+
+fn format_cookie_row(cookie: &EnvironmentCookieDto, site_target: Option<&CookieSiteTarget>) -> String {
+    let mut parts = vec![format!("{}={}", cookie.name, cookie.value)];
+
+    let default_domain = site_target.map(|target| target.domain.as_str()).unwrap_or("");
+    let default_path = site_target.map(|target| target.path.as_str()).unwrap_or("/");
+    let default_secure = site_target.map(|target| target.secure).unwrap_or(false);
+
+    if !cookie.domain.trim().is_empty() && cookie.domain != default_domain {
+        parts.push(format!("domain={}", cookie.domain));
+    }
+
+    let cookie_path = cookie.path.as_deref().unwrap_or("/");
+    if cookie_path != default_path {
+        parts.push(format!("path={}", cookie_path));
+    }
+
+    if cookie.secure.unwrap_or(false) != default_secure && cookie.secure.unwrap_or(false) {
+        parts.push("secure".to_string());
+    }
+
+    if cookie.http_only.unwrap_or(false) {
+        parts.push("httpOnly".to_string());
+    }
+
+    if let Some(same_site) = cookie
+        .same_site
+        .as_deref()
+        .filter(|same_site| !same_site.trim().is_empty() && *same_site != "Lax")
+    {
+        parts.push(format!("sameSite={}", same_site));
+    }
+
+    parts.join("; ")
+}
+
+fn group_cookie_rows(cookie_rows: Vec<EnvironmentCookieDto>) -> Vec<EnvironmentCookieGroupDto> {
+    let mut grouped: HashMap<String, Vec<EnvironmentCookieDto>> = HashMap::new();
+
+    for cookie in cookie_rows {
+        grouped
+            .entry(cookie.site_input.clone())
+            .or_default()
+            .push(cookie);
+    }
+
+    let mut items: Vec<EnvironmentCookieGroupDto> = grouped
+        .into_iter()
+        .map(|(site, cookies)| {
+            let site_target = parse_cookie_site(&site).ok();
+            let simple_only = cookies.iter().all(|cookie| {
+                let default_domain = site_target
+                    .as_ref()
+                    .map(|target| target.domain.as_str())
+                    .unwrap_or("");
+                let default_path = site_target
+                    .as_ref()
+                    .map(|target| target.path.as_str())
+                    .unwrap_or("/");
+                let default_secure = site_target.as_ref().map(|target| target.secure).unwrap_or(false);
+
+                cookie.domain == default_domain
+                    && cookie.path.as_deref().unwrap_or("/") == default_path
+                    && cookie.secure.unwrap_or(false) == default_secure
+                    && !cookie.http_only.unwrap_or(false)
+                    && cookie
+                        .same_site
+                        .as_deref()
+                        .map(|same_site| same_site.eq_ignore_ascii_case("lax"))
+                        .unwrap_or(true)
+                    && cookie.expires_at.is_none()
+            });
+
+            let parts: Vec<String> = cookies
+                .iter()
+                .map(|cookie| format_cookie_row(cookie, site_target.as_ref()))
+                .collect();
+
+            EnvironmentCookieGroupDto {
+                site,
+                cookie_text: if simple_only {
+                    parts.join("; ")
+                } else {
+                    parts.join("\n")
+                },
+            }
+        })
+        .collect();
+
+    items.sort_by(|left, right| left.site.cmp(&right.site));
+    items
 }
 
 async fn replace_environment_urls(
@@ -259,6 +458,36 @@ async fn replace_environment_urls(
         .await
         .map_err(|e| format!("保存 URL 失败: {}", e))?;
     }
+
+    Ok(())
+}
+
+async fn replace_environment_cookies(
+    svc_ctx: &SvcCtx,
+    env_uuid: Uuid,
+    cookie_groups: Option<&[CookieGroupInput]>,
+) -> Result<(), String> {
+    let Some(cookie_groups) = cookie_groups else {
+        return Ok(());
+    };
+
+    models::clear_environment_cookies(&svc_ctx.db, env_uuid)
+        .await
+        .map_err(|e| format!("清空 Cookies 失败: {}", e))?;
+
+    let mut parsed_cookies = Vec::new();
+    for group in cookie_groups {
+        let mut items = parse_cookie_group(group)?;
+        parsed_cookies.append(&mut items);
+    }
+
+    if parsed_cookies.is_empty() {
+        return Ok(());
+    }
+
+    models::batch_insert_environment_cookies(&svc_ctx.db, env_uuid, &parsed_cookies)
+        .await
+        .map_err(|e| format!("保存 Cookies 失败: {}", e))?;
 
     Ok(())
 }
@@ -434,6 +663,24 @@ pub async fn get_environments_service(
         }
     }
 
+    let mut cookies_map: HashMap<Uuid, Vec<EnvironmentCookieGroupDto>> = HashMap::new();
+    if !env_uuids.is_empty() {
+        let cookie_rows = models::fetch_environment_cookies_by_uuids(&svc_ctx.db, &env_uuids)
+            .await
+            .map_err(|e| e.to_string())?;
+        let mut grouped_rows: HashMap<Uuid, Vec<EnvironmentCookieDto>> = HashMap::new();
+        for cookie in cookie_rows {
+            grouped_rows
+                .entry(cookie.environment_uuid)
+                .or_default()
+                .push(cookie);
+        }
+        for (environment_uuid, rows) in grouped_rows {
+            cookies_map
+                .insert(environment_uuid, group_cookie_rows(rows));
+        }
+    }
+
     // 批量查询账号
     let mut accounts_map: HashMap<Uuid, Vec<PlatformAccountDto>> = HashMap::new();
     for env_uuid in &env_uuids {
@@ -516,6 +763,7 @@ pub async fn get_environments_service(
             crate::entitys::EnvironmentDetailResponse {
                 environment,
                 config: configs_map.remove(&row.uuid), // 返回配置信息，用于传递给指纹浏览器内核
+                cookies: cookies_map.remove(&row.uuid).unwrap_or_default(),
                 urls: urls_map.remove(&row.uuid).unwrap_or_default(),
                 tags: tags_map.remove(&row.uuid).unwrap_or_default(),
                 accounts: accounts_map.remove(&row.uuid).unwrap_or_default(),
@@ -614,6 +862,9 @@ pub async fn get_environment_detail_service(
         get_environment_service(svc_ctx, workspace_uuid, team_uuid, user_uuid, env_uuid).await?;
 
     let config = get_environment_config_service(svc_ctx, env_uuid).await.ok();
+    let cookies = get_environment_cookies_service(svc_ctx, env_uuid)
+        .await
+        .unwrap_or_default();
     let urls = get_environment_urls_service(svc_ctx, env_uuid)
         .await
         .unwrap_or_default();
@@ -651,6 +902,7 @@ pub async fn get_environment_detail_service(
     Ok(crate::entitys::EnvironmentDetailResponse {
         environment,
         config,
+        cookies,
         urls,
         tags,
         accounts,
@@ -793,6 +1045,7 @@ pub async fn update_environment_service(
     }
 
     replace_environment_urls(svc_ctx, payload.uuid, payload.urls.as_deref()).await?;
+    replace_environment_cookies(svc_ctx, payload.uuid, payload.cookies.as_deref()).await?;
 
     Ok(())
 }
@@ -1108,6 +1361,22 @@ pub async fn get_recycle_bin_environments_service(
             .push(url);
     }
 
+    let mut env_cookies_map: HashMap<Uuid, Vec<EnvironmentCookieGroupDto>> = HashMap::new();
+    let cookie_rows = models::fetch_environment_cookies_by_uuids(&svc_ctx.db, &env_uuids)
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut grouped_cookie_rows: HashMap<Uuid, Vec<EnvironmentCookieDto>> = HashMap::new();
+    for cookie in cookie_rows {
+        grouped_cookie_rows
+            .entry(cookie.environment_uuid)
+            .or_default()
+            .push(cookie);
+    }
+    for (environment_uuid, rows) in grouped_cookie_rows {
+        env_cookies_map
+            .insert(environment_uuid, group_cookie_rows(rows));
+    }
+
     // 9. 批量查询账号信息
     let mut env_accounts_map: HashMap<Uuid, Vec<PlatformAccountDto>> = HashMap::new();
     for env_uuid in &env_uuids {
@@ -1149,6 +1418,7 @@ pub async fn get_recycle_bin_environments_service(
                     deleted_at: None,
                 },
                 config: None,
+                cookies: env_cookies_map.remove(&row.uuid).unwrap_or_default(),
                 urls: env_urls_map.remove(&row.uuid).unwrap_or_default(),
                 tags,
                 accounts,
@@ -1270,29 +1540,42 @@ pub async fn add_environment_cookie_service(
     svc_ctx: &SvcCtx,
     payload: &AddEnvironmentCookieRequest,
 ) -> Result<i32, String> {
-    models::insert_environment_cookie(
-        &svc_ctx.db,
-        payload.environment_uuid,
-        &payload.domain,
-        &payload.name,
-        &payload.value,
-        payload.path.as_deref(),
-        payload.http_only,
-        payload.secure,
-        payload.same_site.as_deref(),
-    )
-    .await
-    .map_err(|e| e.to_string())
+    let cookies = parse_cookie_group(&CookieGroupInput {
+        site: payload.site.clone(),
+        cookie_text: payload.cookie_text.clone(),
+    })?;
+
+    let mut last_id = 0;
+    for cookie in cookies {
+        last_id = models::insert_environment_cookie(
+            &svc_ctx.db,
+            payload.environment_uuid,
+            &cookie.site_input,
+            &cookie.domain,
+            &cookie.name,
+            &cookie.value,
+            cookie.path.as_deref(),
+            cookie.http_only,
+            cookie.secure,
+            cookie.same_site.as_deref(),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+
+    Ok(last_id)
 }
 
 /// 获取环境的所有 Cookies
 pub async fn get_environment_cookies_service(
     svc_ctx: &SvcCtx,
     env_uuid: Uuid,
-) -> Result<Vec<EnvironmentCookieDto>, String> {
-    models::fetch_environment_cookies(&svc_ctx.db, env_uuid)
+) -> Result<Vec<EnvironmentCookieGroupDto>, String> {
+    let rows = models::fetch_environment_cookies(&svc_ctx.db, env_uuid)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    Ok(group_cookie_rows(rows))
 }
 
 /// 删除环境 Cookie
