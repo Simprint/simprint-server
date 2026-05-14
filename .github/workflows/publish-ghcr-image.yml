@@ -44,7 +44,7 @@ jobs:
           docker run --rm \
             -v "$PWD:/workspace" \
             -w /workspace \
-            rust:1.85-bullseye \
+            rust:1.88-bullseye \
             bash -c '
               export PATH="/usr/local/cargo/bin:/usr/local/rustup/bin:$PATH" &&
               apt-get update &&
