@@ -45,9 +45,11 @@ jobs:
             -v "$PWD:/workspace" \
             -w /workspace \
             rust:1.85-bullseye \
-            bash -lc '
+            bash -c '
+              export PATH="/usr/local/cargo/bin:/usr/local/rustup/bin:$PATH" &&
               apt-get update &&
               apt-get install -y --no-install-recommends pkg-config libssl-dev &&
+              cargo --version &&
               cargo build --release --bin simprint-server
             '
 
