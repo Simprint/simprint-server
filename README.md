@@ -1,226 +1,125 @@
-# Simprint Server
+<div align="center">
+  <h1>Simprint Server</h1>
+  <p>Self-hosted backend service for Simprint workspaces, accounts, environments, proxies, and related runtime APIs.</p>
+  <p>
+    <img alt="Language Rust 2024" src="https://img.shields.io/badge/language-Rust%202024-f97316?style=flat-square&labelColor=0f172a" />
+    <img alt="Framework Axum 0.8" src="https://img.shields.io/badge/framework-Axum%200.8-60a5fa?style=flat-square&labelColor=0f172a" />
+    <img alt="Database PostgreSQL" src="https://img.shields.io/badge/database-PostgreSQL-38bdf8?style=flat-square&labelColor=0f172a" />
+    <img alt="Cache Redis" src="https://img.shields.io/badge/cache-Redis-f87171?style=flat-square&labelColor=0f172a" />
+  </p>
+  <p>
+    <strong>English</strong> | <a href="./README.zh-CN.md">简体中文</a>
+  </p>
+</div>
 
-Simprint 应用的后端服务系统。
+---
 
-## 项目简介
+## Introduction
 
-Simprint Server 是 Simprint 桌面应用的后端服务，提供用户认证、数据管理、版本更新等核心功能支持。
+Simprint Server is the backend service used by Simprint clients and self-hosted deployments. It exposes the application API, manages authentication and persistent data, initializes encryption and storage resources, and runs embedded database migrations during startup.
 
-## 使用示例
+It is intended for operators who want to run Simprint inside their own infrastructure instead of depending on a shared hosted backend. The service is configured through a local TOML file and is designed to work with PostgreSQL, Redis, and S3-compatible object storage.
 
-### 通过 `build_docker.py` 构建 Docker 部署包
+## Why Simprint Server?
 
-脚本位置：
+Running Simprint in a self-hosted setup usually requires more than just an HTTP server:
+
+- You need control over API availability, credentials, and storage infrastructure.
+- You need deployment artifacts that are safe to publish without leaking real environment configuration.
+- You need database schema upgrades to happen predictably during release and restart.
+- You need one backend entry point that can serve workspace, environment, proxy, and account-related APIs together.
+
+Simprint Server is built around those constraints: a single Rust service, a config-first deployment model, embedded migrations, and packaging that only ships a publish-safe example configuration.
+
+## Features
+
+- **Core application API**: Serves account, workspace, team, environment, proxy, template, preference, message, extension, and local runtime endpoints from one process.
+- **Authentication and secret initialization**: Supports login-related flows, token refresh, route whitelists, and RSA secret bootstrap on first startup.
+- **Embedded database migrations**: Executes `sqlx` migrations automatically before the HTTP server starts accepting traffic.
+- **S3-compatible storage integration**: Configures external object storage for avatars, extension assets, and version-related files.
+- **Redis-backed runtime coordination**: Uses Redis for runtime coordination and cache-oriented service flows.
+- **Docker-oriented release packaging**: Generates a deployment archive with `Dockerfile`, `docker-compose.yml`, and `configs/config.toml` copied from `configs/config.example.toml`.
+- **Config-first execution**: Runs locally and in containers with the same `-f <config.toml>` startup model.
+
+## Quick Start
+
+### Prerequisites
+
+- Rust toolchain
+- PostgreSQL 16+ or a compatible PostgreSQL instance
+- Redis 7+
+- S3-compatible object storage
+- Optional SMTP server for email-related flows
+
+### One-line self-hosted server install
+
+Linux servers can bootstrap the self-hosted backend with:
 
 ```bash
-./build_docker.py
+curl -fsSL https://raw.githubusercontent.com/Simprint/simprint/main/deploy/install-server.sh | bash # Update the client config afterwards, for example: base_url = http://127.0.0.1:40041/api/
 ```
 
-脚本会执行这些步骤：
-
-- 编译 `simprint-server`
-- 编译 `console-gateway`
-- 编译 `update-gateway`
-- 将三个二进制文件复制到项目根目录
-- 默认生成一个 `tar.gz` Docker 部署包
-
-在项目根目录执行：
+### Run locally
 
 ```bash
-python3 build_docker.py
+cp configs/config.example.toml configs/config.local.toml
+# edit configs/config.local.toml
+cargo run -- -f configs/config.local.toml
 ```
 
-如果你本地使用 `uv`，也可以直接执行：
+The example configuration listens on port `40041` and uses the `/api/v1` prefix by default.
+
+### Build a Docker release package
+
+Use:
 
 ```bash
 uv run python build_docker.py
 ```
 
-常用命令：
+The default build produces:
+
+- `./simprint-server`
+- `./simprint-server-docker-*.tar.gz`
+
+You can also use options such as:
 
 ```bash
-# 默认 release 构建，并生成 tar.gz 部署包
-python3 build_docker.py
-uv run python build_docker.py
-
-# 构建前清理旧二进制
-python3 build_docker.py --clean
 uv run python build_docker.py --clean
-
-# 只编译并复制二进制，不生成压缩包
-python3 build_docker.py --no-package
 uv run python build_docker.py --no-package
-
-# 生成 zip 格式部署包
-python3 build_docker.py --format zip
 uv run python build_docker.py --format zip
-
-# 使用 dev 模式编译
-python3 build_docker.py --dev --no-package
 uv run python build_docker.py --dev --no-package
 ```
 
-构建完成后：
+The packaged `configs/config.toml` is generated from `configs/config.example.toml`, and real environment-specific config files are intentionally not included in the release archive.
 
-- 二进制文件会出现在当前项目根目录：
-  - `./simprint-server`
-  - `./console-gateway`
-  - `./update-gateway`
-- 如果未使用 `--no-package`，还会在项目根目录生成：
-  - `simprint-server-docker-*.tar.gz`
-  - 或 `simprint-server-docker-*.zip`
+## Status
 
-### 启动服务
+Simprint Server was originally developed as part of a private commercial backend stack. This repository is now being prepared for a public open-source release, and the documentation is being rewritten to make standalone self-hosted deployment easier to understand.
 
-服务需要通过配置文件启动，配置文件路径通过命令行参数指定：
+Some modules and naming still reflect earlier internal deployment assumptions. The current direction is to keep the client-facing gateway service deployable as an independent repository with a cleaner public-facing setup.
 
-```bash
-./simprint-server -f=configs/config.dev.toml
-./simprint-server -f=configs/config.dev.toml serve
-```
+## Contributing
 
-### Docker 部署配置模板
+This repository is still in an open-source refactoring phase, but issues and pull requests are welcome.
 
-对外发布的 Docker 部署包仅包含 `configs/config.toml` 配置模板。
-部署前请先按实际环境修改这个文件。
-其中数据库连接串默认指向 Compose 内的 `postgres` 服务，
-如果你修改了 `docker-compose.yml` 里的 `POSTGRES_USER`、`POSTGRES_PASSWORD` 或数据库名，
-需要同步修改 `configs/config.toml` 中的 `[database].url`。
-RSA 密钥不会随部署包下发，服务首次启动时会在容器卷中自动生成并持久化保存。
+High-value contribution areas include:
 
-然后再使用 Docker Compose 启动，Compose 默认读取：
+- Self-hosted deployment docs and onboarding improvements
+- Test coverage and regression verification
+- API documentation and route-level usage examples
+- Packaging, release, and CI improvements
 
-```bash
-/app/configs/config.toml
-```
+Useful entry points when exploring the codebase:
 
-### 发布 `simprint-server` 镜像
+- `src/main.rs`
+- `src/cli.rs`
+- `configs/config.example.toml`
+- `build_docker.py`
+- `docs/`
 
-如果你要手动发布 `simprint-server` 到 GHCR，可以按下面的流程执行：
+## License
 
-```bash
-# 1. 构建发布包
-python3 build_docker.py
+This project is licensed under the GNU Affero General Public License v3.0 (AGPLv3).
 
-# 2. 解压部署包
-tar -xzf simprint-server-docker-*.tar.gz
-cd simprint-server-docker-*
-
-# 3. 本地构建镜像
-docker build --build-arg BINARY_NAME=simprint-server -t simprint-server:local .
-
-# 4. 可选：本地验证
-docker tag simprint-server:local publish-simprint-server:latest
-docker images | grep simprint-server
-
-# 5. 登录 GHCR
-echo "$GITHUB_TOKEN" | docker login ghcr.io -u <github-username> --password-stdin
-
-# 6. 打 tag 并推送
-docker tag simprint-server:local ghcr.io/simprint/simprint-server:latest
-docker push ghcr.io/simprint/simprint-server:latest
-```
-
-如果你要发布特定版本，可以额外打一个版本标签：
-
-```bash
-docker tag simprint-server:local ghcr.io/simprint/simprint-server:v0.1.0
-docker push ghcr.io/simprint/simprint-server:v0.1.0
-```
-
-### 初始化数据库
-
-数据库迁移已编译进 `simprint-server` 二进制，并会在服务启动时自动执行。
-因此部署时无需再单独执行迁移命令。
-
-```bash
-docker compose up -d
-```
-
-该流程无需额外公开 `migrations/` 目录。
-
-### 服务入口
-
-Simprint Server 提供三种服务入口：
-
-- **客户端网关**：为桌面应用提供基础服务接口
-- **控制台网关**：为管理后台提供管理功能接口
-- **更新网关**：为应用更新提供版本检查接口
-
-> **注意**：详细的使用示例和 API 文档将在后续版本中添加。
-
-## 贡献指南
-
-我们欢迎所有形式的贡献！如果您想为 Simprint Server 项目做出贡献，请遵循以下步骤：
-
-1. **Fork 项目**：在 GitHub 上 Fork 本项目
-2. **创建分支**：从 `master` 分支创建新的功能分支
-3. **提交更改**：进行代码修改并提交，遵循项目的代码规范
-4. **推送分支**：将更改推送到您的 Fork
-5. **创建 Pull Request**：向主项目提交 Pull Request
-
-### 代码规范
-
-- 遵循 Rust 代码风格和格式化规范
-- 提交前运行 `cargo fmt` 和 `cargo clippy`
-- 确保所有测试通过
-- 数据库迁移文件命名遵循规范
-- 添加适当的文档注释
-
-更多详细信息请参考项目目录下的 `AGENTS.md` 文件。
-
-## 许可证信息
-
-本项目采用私有许可证，未经授权不得使用、复制、修改或分发。
-
-## 故障排除
-
-### 常见问题
-
-**Q: 服务无法启动？**
-
-A: 请检查以下事项：
-
-- 确保配置文件路径正确
-- 检查配置文件格式是否正确
-- 确保数据库连接配置正确
-- 检查端口是否被占用
-- 查看服务日志获取详细错误信息
-
-**Q: 数据库连接失败？**
-
-A: 请检查：
-
-- 数据库服务是否正在运行
-- 数据库连接字符串是否正确
-- 数据库用户权限是否足够
-- 网络连接是否正常
-
-**Q: Redis 连接失败？**
-
-A: 请检查：
-
-- Redis 服务是否正在运行
-- Redis 连接 URL 是否正确
-- Redis 认证信息是否正确
-
-**Q: 对象存储服务异常？**
-
-A: 可能的原因：
-
-- 对象存储服务未启动
-- 访问密钥配置错误
-- 网络连接问题
-- 存储桶不存在或权限不足
-
-**Q: 如何查看服务日志？**
-
-A: 服务日志会输出到控制台，生产环境建议配置日志文件输出。
-
-### 获取帮助
-
-如果以上方法无法解决您的问题，请：
-
-- 查看项目的 Issue 列表，看是否有类似问题
-- 创建新的 Issue 描述您的问题
-- 联系项目维护者
+If you want to use Simprint Server in a way that does not comply with the AGPLv3 obligations, including distributing modified versions or providing modified versions as a closed-source service, please contact us for a commercial license.
