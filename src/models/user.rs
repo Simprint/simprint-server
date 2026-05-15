@@ -507,3 +507,25 @@ pub async fn set_user_current_workspace(
 
     Ok(())
 }
+
+pub async fn set_user_current_workspace_and_team(
+    pool: &Pool<Postgres>,
+    user_uuid: Uuid,
+    workspace_uuid: Uuid,
+    team_uuid: Uuid,
+) -> Result<(), Error> {
+    sqlx::query(
+        r#"
+        UPDATE user_infos
+        SET current_workspace_uuid = $1, current_team_uuid = $2
+        WHERE user_uuid = $3
+        "#,
+    )
+    .bind(workspace_uuid)
+    .bind(team_uuid)
+    .bind(user_uuid)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}

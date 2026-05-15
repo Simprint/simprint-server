@@ -171,10 +171,9 @@ pub async fn switch_workspace_handler(
         return Err(Response::fail(Some("您不是该工作空间的所有者")));
     }
 
-    // 更新用户当前工作空间
-    crate::models::user::set_user_current_workspace(&svc_ctx.db, user_uuid, payload.workspace_uuid)
+    services::workspaces::switch_workspace_service(&svc_ctx, payload.workspace_uuid, user_uuid)
         .await
-        .map_err(|e| Response::fail(Some(&e.to_string())))?;
+        .map_err(|e| Response::fail(Some(&e)))?;
 
     Ok(Response::success(Some("切换成功"), None))
 }

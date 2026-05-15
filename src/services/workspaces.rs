@@ -57,12 +57,12 @@ pub async fn create_workspace_service(
         name: team_name,
         description: Some("默认团队".to_string()),
     };
-    models::insert_team(&svc_ctx.db, user_uuid, &team_request)
+    let team_uuid = models::insert_team(&svc_ctx.db, user_uuid, &team_request)
         .await
         .map_err(|e| e.to_string())?;
 
-    // 设置用户当前工作空间（与注册时的逻辑保持一致）
-    models::user::set_user_current_workspace(&svc_ctx.db, user_uuid, workspace_uuid)
+    // 设置用户当前工作空间和团队，确保上下文始终一致。
+    models::user::set_user_current_workspace_and_team(&svc_ctx.db, user_uuid, workspace_uuid, team_uuid)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -127,6 +127,14 @@ pub async fn delete_workspace_service(
         return Err("只有工作空间所有者可以删除".to_string());
     }
 
+    let current_workspace_uuid = models::user::fetch_user_current_workspace(&svc_ctx.db, user_uuid)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if current_workspace_uuid == Some(workspace_uuid) {
+        return Err("不能删除当前正在使用的工作空间，请先切换到其他工作空间".to_string());
+    }
+
     // 检查用户是否只有一个工作空间，如果是则不允许删除
     let user_workspaces = models::fetch_user_workspaces(&svc_ctx.db, user_uuid)
         .await
@@ -148,6 +156,29 @@ pub async fn check_workspace_owner_service(
     user_uuid: Uuid,
 ) -> Result<bool, String> {
     models::check_workspace_owner(&svc_ctx.db, workspace_uuid, user_uuid)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+pub async fn switch_workspace_service(
+    svc_ctx: &SvcCtx,
+    workspace_uuid: Uuid,
+    user_uuid: Uuid,
+) -> Result<(), String> {
+    let teams = models::fetch_user_teams(&svc_ctx.db, workspace_uuid, user_uuid)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let current_team_uuid = models::fetch_user_current_team(&svc_ctx.db, user_uuid)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let team_uuid = current_team_uuid
+        .filter(|current| teams.iter().any(|team| team.uuid == *current))
+        .or_else(|| teams.first().map(|team| team.uuid))
+        .ok_or_else(|| "该工作空间下没有可用团队".to_string())?;
+
+    models::user::set_user_current_workspace_and_team(&svc_ctx.db, user_uuid, workspace_uuid, team_uuid)
         .await
         .map_err(|e| e.to_string())
 }
