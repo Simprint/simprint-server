@@ -876,10 +876,8 @@ pub async fn permanent_delete_environment(
         .execute(pool)
         .await?;
 
-    sqlx::query("DELETE FROM environment_extensions WHERE environment_uuid = $1")
-        .bind(env_uuid)
-        .execute(pool)
-        .await?;
+    // `environment_extensions` 已在扩展系统重构后移除。
+    // 环境的扩展现在通过 user/team/group 绑定动态合并，不再需要清理环境级关联。
 
     // 最后删除环境本身
     sqlx::query("DELETE FROM environments WHERE uuid = $1")
@@ -921,10 +919,8 @@ pub async fn batch_permanent_delete_environments(
         .execute(pool)
         .await?;
 
-    sqlx::query("DELETE FROM environment_extensions WHERE environment_uuid = ANY($1)")
-        .bind(env_uuids)
-        .execute(pool)
-        .await?;
+    // `environment_extensions` 已在扩展系统重构后移除。
+    // 环境的扩展现在通过 user/team/group 绑定动态合并，不再需要清理环境级关联。
 
     // 最后删除环境本身
     let result = sqlx::query("DELETE FROM environments WHERE uuid = ANY($1)")
